@@ -27,6 +27,7 @@
     --purple: #534AB7;
     --pink: #D4537E;
     --gray: #888780;
+    --amber-bg: #FCF1E1;
   }
   @media (prefers-color-scheme: dark) {
     :root {
@@ -41,6 +42,7 @@
       --pill-reit-bg: #0d2e22; --pill-reit-tc: #4DC49A;
       --pill-bond-bg: #2e2210; --pill-bond-tc: #D4974A;
       --pill-etf-bg: #1e1c38; --pill-etf-tc: #9490D8;
+      --amber-bg: #2e2410;
     }
   }
   body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif; background: var(--bg-tertiary); color: var(--text-primary); font-size: 14px; }
@@ -646,7 +648,7 @@
       <div class="sb-item" id="nav-holdings"     onclick="switchTab('holdings',this)"     title="Holdings"><i class="ti ti-briefcase" aria-hidden="true"></i><span class="sb-label">Holdings</span></div>
       <div class="sb-item" id="nav-performance"  onclick="switchTab('performance',this)"  title="Performance"><i class="ti ti-trending-up" aria-hidden="true"></i><span class="sb-label">Performance</span></div>
       <div class="sb-item" id="nav-risk"         onclick="switchTab('risk',this)"         title="Risk &amp; Drawdown"><i class="ti ti-shield" aria-hidden="true"></i><span class="sb-label">Risk</span></div>
-      <div class="sb-item" id="nav-exposure"     onclick="switchTab('exposure',this)"     title="Exposure"><i class="ti ti-chart-pie" aria-hidden="true"></i><span class="sb-label">Exposure</span></div>
+      <div class="sb-item" id="nav-exposure"     onclick="switchTab('exposure',this)"     title="Exposure &amp; Analysis"><i class="ti ti-chart-pie" aria-hidden="true"></i><span class="sb-label">Exposure &amp; Analysis</span></div>
       <div class="sb-divider"></div>
       <div class="sb-item" id="nav-dividends"    onclick="switchTab('dividends',this)"    title="Dividends"><i class="ti ti-cash" aria-hidden="true"></i><span class="sb-label">Dividends</span></div>
       <div class="sb-item" id="nav-transactions" onclick="switchTab('transactions',this)" title="Transactions"><i class="ti ti-list" aria-hidden="true"></i><span class="sb-label">Transactions</span></div>
@@ -703,6 +705,14 @@
         </div>
       </div>
       <div class="pf-bar" id="pf-bar"></div>
+    </div>
+
+    <div id="backup-reminder-banner" class="hidden" style="display:flex;align-items:center;justify-content:space-between;gap:12px;padding:10px 20px;background:var(--amber-bg);color:var(--amber);border-bottom:1px solid var(--border);font-size:13px;">
+      <span><i class="ti ti-clock-exclamation" style="margin-right:6px"></i><span id="backup-reminder-text">It's been a while since your last backup.</span></span>
+      <div style="display:flex;gap:8px;flex-shrink:0">
+        <button class="btn-primary" style="padding:5px 12px;font-size:12px" onclick="exportCSV(); dismissBackupReminder();">Export now</button>
+        <button class="btn-secondary" style="padding:5px 12px;font-size:12px" onclick="dismissBackupReminder()">Remind me later</button>
+      </div>
     </div>
 
   <div class="content">
@@ -790,6 +800,46 @@
         <div style="position:relative;width:100%;height:180px"><canvas id="navChart"></canvas></div>
       </div>
 
+      <!-- Zone C: Last session movers + Upcoming dividends -->
+      <div class="db-zone-c">
+        <!-- Last session movers -->
+        <div class="chart-card">
+          <div class="chart-title" style="margin-bottom:8px">
+            Last session movers
+            <span class="chart-title-sub">EOD close · T-1 vs T-2</span>
+          </div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px" id="movers-container">
+            <div>
+              <div style="font-size:11px;text-transform:uppercase;letter-spacing:0.05em;color:var(--green);font-weight:600;margin-bottom:6px;padding-bottom:4px;border-bottom:0.5px solid var(--border)">
+                <i class="ti ti-trending-up" style="font-size:11px"></i> Gainers
+              </div>
+              <div id="dash-gainers"><div style="font-size:12px;color:var(--text-secondary);padding:8px 0">Fetch prices to see movers</div></div>
+            </div>
+            <div>
+              <div style="font-size:11px;text-transform:uppercase;letter-spacing:0.05em;color:var(--red);font-weight:600;margin-bottom:6px;padding-bottom:4px;border-bottom:0.5px solid var(--border)">
+                <i class="ti ti-trending-down" style="font-size:11px"></i> Losers
+              </div>
+              <div id="dash-losers"><div style="font-size:12px;color:var(--text-secondary);padding:8px 0">Fetch prices to see movers</div></div>
+            </div>
+          </div>
+        </div>
+        <!-- Upcoming dividends -->
+        <div class="chart-card">
+          <div class="chart-title" style="margin-bottom:8px">
+            Upcoming dividends
+            <span class="chart-title-sub">declared · by pay date</span>
+            <button class="btn-secondary" onclick="fetchAnnouncedDividends()" style="padding:3px 8px;font-size:11px" title="Refresh declared announcements"><i class="ti ti-refresh" style="font-size:11px"></i></button>
+          </div>
+          <div id="dash-upcoming-divs">
+            <div style="font-size:12px;color:var(--text-secondary);padding:8px 0">Click refresh to load upcoming ex-dates from SGX &amp; Yahoo</div>
+          </div>
+          <div id="dash-upcoming-total" style="display:none;margin-top:8px;padding-top:8px;border-top:0.5px solid var(--border);font-size:12px;display:flex;justify-content:space-between;align-items:center">
+            <span style="color:var(--text-secondary)">Total receivable</span>
+            <span style="font-weight:600;color:var(--green)" id="dash-upcoming-total-val">—</span>
+          </div>
+        </div>
+      </div>
+
       <!-- Zone B: Sunburst — Asset type → Sector → Position -->
       <div class="db-zone-b">
         <div class="chart-card" style="display:flex;flex-direction:column">
@@ -830,46 +880,6 @@
         <div class="db-right-col" style="display:none">
           <div class="chart-card"><canvas id="allocChart" style="display:none"></canvas><div id="alloc-legend"></div></div>
           <div class="chart-card"><canvas id="dashSectorDoughnutChart" style="display:none"></canvas><div id="dash-sector-legend"></div></div>
-        </div>
-      </div>
-
-      <!-- Zone C: Upcoming dividends + Last session movers -->
-      <div class="db-zone-c">
-        <!-- Upcoming dividends -->
-        <div class="chart-card">
-          <div class="chart-title" style="margin-bottom:8px">
-            Upcoming dividends
-            <span class="chart-title-sub">declared · by pay date</span>
-            <button class="btn-secondary" onclick="fetchAnnouncedDividends()" style="padding:3px 8px;font-size:11px" title="Refresh declared announcements"><i class="ti ti-refresh" style="font-size:11px"></i></button>
-          </div>
-          <div id="dash-upcoming-divs">
-            <div style="font-size:12px;color:var(--text-secondary);padding:8px 0">Click refresh to load upcoming ex-dates from SGX &amp; Yahoo</div>
-          </div>
-          <div id="dash-upcoming-total" style="display:none;margin-top:8px;padding-top:8px;border-top:0.5px solid var(--border);font-size:12px;display:flex;justify-content:space-between;align-items:center">
-            <span style="color:var(--text-secondary)">Total receivable</span>
-            <span style="font-weight:600;color:var(--green)" id="dash-upcoming-total-val">—</span>
-          </div>
-        </div>
-        <!-- Last session movers -->
-        <div class="chart-card">
-          <div class="chart-title" style="margin-bottom:8px">
-            Last session movers
-            <span class="chart-title-sub">EOD close · T-1 vs T-2</span>
-          </div>
-          <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px" id="movers-container">
-            <div>
-              <div style="font-size:11px;text-transform:uppercase;letter-spacing:0.05em;color:var(--green);font-weight:600;margin-bottom:6px;padding-bottom:4px;border-bottom:0.5px solid var(--border)">
-                <i class="ti ti-trending-up" style="font-size:11px"></i> Gainers
-              </div>
-              <div id="dash-gainers"><div style="font-size:12px;color:var(--text-secondary);padding:8px 0">Fetch prices to see movers</div></div>
-            </div>
-            <div>
-              <div style="font-size:11px;text-transform:uppercase;letter-spacing:0.05em;color:var(--red);font-weight:600;margin-bottom:6px;padding-bottom:4px;border-bottom:0.5px solid var(--border)">
-                <i class="ti ti-trending-down" style="font-size:11px"></i> Losers
-              </div>
-              <div id="dash-losers"><div style="font-size:12px;color:var(--text-secondary);padding:8px 0">Fetch prices to see movers</div></div>
-            </div>
-          </div>
         </div>
       </div>
 
@@ -949,7 +959,7 @@
         <div class="section-header">
           <span class="section-title">Current holdings</span>
           <div style="display:flex;gap:8px;flex-wrap:wrap">
-            <div class="search-wrap"><i class="ti ti-search"></i><input type="text" id="holdings-search" placeholder="Search…" oninput="renderHoldings()" style="width:150px"></div>
+            <div class="search-wrap"><i class="ti ti-search"></i><input type="text" id="holdings-search" placeholder="Search symbol or name…" oninput="renderHoldings()" style="width:170px"></div>
             <select id="holdings-filter" onchange="renderHoldings()">
               <option value="all">All types</option>
               <option value="stock">Stocks</option>
@@ -972,6 +982,7 @@
               <th style="text-align:right">Shares</th>
               <th style="text-align:right">Avg cost</th>
               <th style="text-align:right" id="holdings-price-hdr">Price</th>
+              <th style="text-align:right">Day change</th>
               <th style="text-align:right">Value (SGD)</th>
               <th style="text-align:right">P&amp;L (SGD)</th>
               <th style="text-align:right">Return %</th>
@@ -1188,6 +1199,54 @@
 
     <!-- EXPOSURE -->
     <div id="tab-exposure" class="hidden">
+      <div class="chart-card" id="grouped-summary-card">
+        <div class="section-header">
+          <span class="section-title">Portfolio summary <span class="chart-title-sub" id="grouped-summary-sub">current and closed positions, grouped by exchange</span></span>
+          <select id="exposure-group-by" onchange="renderGroupedSummary()">
+            <option value="exch">By exchange</option>
+            <option value="type">By type</option>
+            <option value="ccy">By currency</option>
+          </select>
+        </div>
+        <div class="table-wrap">
+          <table class="data-table">
+            <thead><tr>
+              <th id="grouped-summary-col-hdr">Exchange</th>
+              <th style="text-align:right"># Open</th>
+              <th style="text-align:right"># Closed</th>
+              <th style="text-align:right">Current value</th>
+              <th style="text-align:right">Current P&amp;L</th>
+              <th style="text-align:right">Realised P&amp;L</th>
+              <th style="text-align:right">Dividends (all-time)</th>
+              <th style="text-align:right">Total return</th>
+              <th style="text-align:right">Return %</th>
+              <th style="text-align:right">XIRR</th>
+            </tr></thead>
+            <tbody id="grouped-summary-body"></tbody>
+          </table>
+        </div>
+      </div>
+      <div class="chart-card" id="ticker-compare-card" style="display:none">
+        <div class="section-header">
+          <span class="section-title">Compare tickers <span class="chart-title-sub">tick the checkbox next to any ticker above to add it here</span></span>
+          <span onclick="clearTickerCompare()" style="font-size:12px;color:var(--text-secondary);cursor:pointer;text-decoration:underline">Clear all</span>
+        </div>
+        <div class="table-wrap">
+          <table class="data-table">
+            <thead><tr>
+              <th>Ticker</th>
+              <th style="text-align:right">Current value</th>
+              <th style="text-align:right">Current P&amp;L</th>
+              <th style="text-align:right">Realised P&amp;L</th>
+              <th style="text-align:right">Dividends (all-time)</th>
+              <th style="text-align:right">Total return</th>
+              <th style="text-align:right">Return %</th>
+              <th style="text-align:right">XIRR</th>
+            </tr></thead>
+            <tbody id="ticker-compare-body"></tbody>
+          </table>
+        </div>
+      </div>
       <div class="grid-3">
         <div class="chart-card">
           <div class="chart-title">By asset type</div>
@@ -1260,18 +1319,30 @@
       <!-- YTD dividends received by pay date + Upcoming ex-dates — immediately after KPIs -->
       <div class="grid-2">
         <div class="chart-card">
-          <div class="chart-title">YTD dividends received <span class="chart-title-sub" id="ytd-div-sub" title="Strictly dividends already paid out by today. A dividend that has gone ex but not yet reached its pay date will appear here only once paid.">by pay date</span></div>
+          <div class="chart-title">YTD dividends received <span class="chart-title-sub" id="ytd-div-sub" title="Strictly dividends already paid out by today. A dividend that has gone ex but not yet reached its pay date will appear here only once paid.">by pay date</span>
+            <span onclick="openModal('ytd-div-modal')" style="font-size:12px;color:var(--text-secondary);cursor:pointer;text-decoration:underline;font-weight:400" id="ytd-div-expand-link">Show all</span>
+          </div>
           <div id="div-ytd-by-paydate"></div>
         </div>
         <div class="chart-card">
-          <div class="chart-title">Upcoming ex-dividend dates <span class="chart-title-sub">next 60 days</span></div>
+          <div class="chart-title">Upcoming ex-dividend dates <span class="chart-title-sub">next 60 days</span>
+            <span onclick="openModal('upcoming-div-modal')" style="font-size:12px;color:var(--text-secondary);cursor:pointer;text-decoration:underline;font-weight:400" id="upcoming-div-expand-link">Show all</span>
+          </div>
+          <div id="div-upcoming-total" style="font-size:12px;color:var(--text-secondary);margin-bottom:8px"></div>
           <div id="div-upcoming"></div>
         </div>
       </div>
 
       <!-- Historical received by year — stacked by stock -->
       <div class="chart-card">
-        <div class="chart-title">Dividends received by year (SGD) <span class="chart-title-sub" id="div-data-note">stacked by stock</span></div>
+        <div class="chart-title">Dividends received by year (SGD) <span class="chart-title-sub" id="div-data-note">stacked by stock</span>
+          <div class="range-btns">
+            <button class="rbtn" onclick="setDivReceivedRange('YTD',this)">YTD</button>
+            <button class="rbtn" onclick="setDivReceivedRange('3Y',this)">3Y</button>
+            <button class="rbtn" onclick="setDivReceivedRange('5Y',this)">5Y</button>
+            <button class="rbtn active" onclick="setDivReceivedRange('ALL',this)">All</button>
+          </div>
+        </div>
         <div style="position:relative;width:100%;height:260px"><canvas id="divReceivedChart"></canvas></div>
       </div>
 
@@ -1519,7 +1590,10 @@
       <div class="chart-card" id="rl-summary-card">
         <div class="section-header">
           <span class="section-title">Closed positions summary</span>
-          <span class="chart-title-sub">one row per ticker · capital gain + dividends received · click row for local currency &amp; FX detail</span>
+          <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+            <span class="chart-title-sub">one row per ticker · capital gain + dividends received · click row for local currency &amp; FX detail</span>
+            <div class="search-wrap"><i class="ti ti-search"></i><input type="text" id="rl-summary-search" placeholder="Search symbol or name…" oninput="renderRealised()" style="width:170px"></div>
+          </div>
         </div>
         <div class="table-wrap">
           <table class="data-table">
@@ -1546,7 +1620,10 @@
       <div class="chart-card">
         <div class="section-header">
           <span class="section-title">Sell history</span>
-          <span class="chart-title-sub">one row per sell · FIFO cost basis · click row to expand lot detail · <span id="rl-sell-count" style="color:var(--text-secondary)"></span></span>
+          <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+            <span class="chart-title-sub">one row per sell · FIFO cost basis · click row to expand lot detail · <span id="rl-sell-count" style="color:var(--text-secondary)"></span></span>
+            <div class="search-wrap"><i class="ti ti-search"></i><input type="text" id="rl-sell-search" placeholder="Search symbol or name…" oninput="renderRealised()" style="width:170px"></div>
+          </div>
         </div>
         <div class="table-wrap">
           <table class="data-table">
@@ -1675,6 +1752,49 @@
       </div>
       <div id="parse-status" style="margin-top:12px"></div>
 
+      <!-- Dividend declarations & corrections — duplicated here from the Dividends tab
+           so backup/restore is reachable without the long scroll down that tab. Both
+           rows call the exact same functions as the Dividends tab originals; only the
+           Saved corrections row needs its own element IDs (suffixed -settings) since
+           renderSavedCorrections() toggles those buttons' visibility by ID and needs
+           to drive both copies. -->
+      <div class="chart-card" style="margin-top:12px">
+        <div class="chart-title">Dividend declarations &amp; corrections
+          <span class="chart-title-sub">backup / restore — same data as the Dividends tab, kept here for quick access</span>
+        </div>
+
+        <!-- Add / update declarations — export/import -->
+        <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:6px;padding:8px 0;border-bottom:0.5px solid var(--border)">
+          <div>
+            <div style="font-size:12px;font-weight:500">Manual dividend declarations</div>
+            <div style="font-size:11px;color:var(--text-secondary)">non-SGX / manually entered DPS declarations</div>
+          </div>
+          <div style="display:flex;gap:6px">
+            <button onclick="exportManualDeclarations()" class="btn-secondary" style="padding:3px 10px;font-size:11px" title="Export all declarations to CSV">
+              <i class="ti ti-download" style="font-size:11px;margin-right:3px"></i>Export CSV
+            </button>
+            <label class="btn-secondary" style="padding:3px 10px;font-size:11px;cursor:pointer" title="Import declarations from CSV">
+              <i class="ti ti-upload" style="font-size:11px;margin-right:3px"></i>Import CSV
+              <input type="file" accept=".csv" style="display:none" onchange="importManualDeclarations(this)">
+            </label>
+          </div>
+        </div>
+
+        <!-- Saved corrections — export/import/clear (mirrors #saved-corrections-card) -->
+        <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:6px;padding:8px 0">
+          <div>
+            <div style="font-size:12px;font-weight:500">Saved DPS corrections</div>
+            <div style="font-size:11px;color:var(--text-secondary)"><span id="saved-corrections-count-settings">—</span> · auto-applied on every session load</div>
+          </div>
+          <div style="display:flex;gap:6px">
+            <button id="sc-export-json-settings" class="btn-secondary" style="padding:3px 8px;font-size:11px" onclick="exportDivCorrections()"><i class="ti ti-download" style="font-size:11px;margin-right:3px"></i>Export JSON</button>
+            <button id="sc-export-csv-settings" class="btn-secondary" style="padding:3px 8px;font-size:11px" onclick="exportDivCorrectionsCSV()"><i class="ti ti-table-export" style="font-size:11px;margin-right:3px"></i>Export CSV</button>
+            <label class="btn-secondary" style="padding:3px 8px;font-size:11px;cursor:pointer"><i class="ti ti-upload" style="font-size:11px;margin-right:3px"></i>Import CSV/JSON<input type="file" accept=".json,.csv" style="display:none" onchange="importDivCorrections(this)"></label>
+            <button id="sc-clear-all-settings" class="btn-secondary" style="padding:3px 8px;font-size:11px" onclick="clearAllSavedCorrections()">Clear all</button>
+          </div>
+        </div>
+      </div>
+
       <!-- Static price overrides -->
       <div class="chart-card" style="margin-top:12px">
         <div class="chart-title">Manual price overrides
@@ -1715,6 +1835,15 @@
         <div id="classification-editor"></div>
       </div>
 
+      <!-- Holdings tags editor -->
+      <div class="chart-card" style="margin-top:12px">
+        <div class="chart-title">Holdings tags
+          <span class="chart-title-sub">custom tags per position — used by the Exposure tab filter</span>
+        </div>
+        <p style="font-size:12px;color:var(--text-secondary);margin-bottom:10px">Comma-separated, e.g. <code style="font-family:monospace;background:var(--bg-secondary);padding:1px 5px;border-radius:3px">core income, REIT sleeve</code>. A holding can have any number of tags, or none.</p>
+        <div id="tags-editor"></div>
+      </div>
+
   </div>
 </div>
 
@@ -1723,14 +1852,86 @@ let portfolio = { transactions:[], holdings:{}, navSeries:[], navSeriesFull:[], 
 
 // ─── MULTI-PORTFOLIO REGISTRY ─────────────────────────────────────────
 // Registry shape: { [id]: { id, name, color, transactions:[] } }
-// Session-only — resets on every page load, matching original app behaviour.
+// Persisted to localStorage — survives page reloads. The in-app CSV import
+// remains the way to SEED a portfolio; once seeded, all edits/adds/deletes
+// (and the import itself) are saved here automatically. The file on disk
+// (portfolio_merged_enriched_22_6.csv or similar) is no longer re-read on
+// every session — use the Export-to-CSV button to manually re-sync it.
 const PF_COLORS = ['#1D9E75','#378ADD','#BA7517','#534AB7','#D4537E','#E24B4A','#888780','#5DCAA5'];
+const PF_REGISTRY_KEY    = 'pfRegistry';
+const ACTIVE_PF_IDS_KEY  = 'activePfIds';
 
 let pfRegistry  = {}; // { [id]: {id, name, color, transactions[]} }
 let activePfIds = []; // [] = show all (combined); [id] = single; [id,id] = multi
 
-function savePfRegistry()  { /* session-only — no persistence */ }
-function saveActivePfIds() { /* session-only — no persistence */ }
+// Transactions hold real Date objects in memory, but JSON has no Date type —
+// JSON.stringify silently calls .toISOString() on them (fine), but
+// JSON.parse never reverses that automatically, so dates would come back
+// as plain strings. Every downstream calculation (buildNavSeries, FIFO
+// realised P&L, dividend-split matching) does direct Date arithmetic
+// (t.date - other.date, t.date.getTime()) on transaction dates, so a
+// silent string-instead-of-Date bug here would corrupt those calculations
+// rather than throw — explicit revival on load is required, not optional.
+function reviveTxnDates(txns) {
+  txns.forEach(t => {
+    if (typeof t.date === 'string') t.date = new Date(t.date);
+  });
+  return txns;
+}
+
+function savePfRegistry() {
+  try {
+    localStorage.setItem(PF_REGISTRY_KEY, JSON.stringify(pfRegistry));
+  } catch (e) {
+    console.error('[persistence] Failed to save pfRegistry', e);
+    toast('Could not save changes — your browser storage may be full', 'error');
+  }
+}
+
+function saveActivePfIds() {
+  try {
+    localStorage.setItem(ACTIVE_PF_IDS_KEY, JSON.stringify(activePfIds));
+  } catch (e) {
+    console.error('[persistence] Failed to save activePfIds', e);
+  }
+}
+
+// Load both keys from localStorage into memory. Called once on page load.
+// Defensive about shape — corrupted/old/foreign data in these keys should
+// degrade to "start empty" rather than throw and block the whole app.
+function loadPfRegistry() {
+  try {
+    const raw = localStorage.getItem(PF_REGISTRY_KEY);
+    if (!raw) return false;
+    const parsed = JSON.parse(raw);
+    if (!parsed || typeof parsed !== 'object') return false;
+    Object.keys(parsed).forEach(id => {
+      const pf = parsed[id];
+      if (!pf || !Array.isArray(pf.transactions)) return; // skip malformed entry
+      reviveTxnDates(pf.transactions);
+    });
+    pfRegistry = parsed;
+    return Object.keys(pfRegistry).length > 0;
+  } catch (e) {
+    console.error('[persistence] Failed to load pfRegistry — starting empty', e);
+    return false;
+  }
+}
+
+function loadActivePfIds() {
+  try {
+    const raw = localStorage.getItem(ACTIVE_PF_IDS_KEY);
+    if (!raw) return;
+    const parsed = JSON.parse(raw);
+    if (Array.isArray(parsed)) {
+      // Strip any ids that no longer exist in the registry (e.g. registry
+      // was edited/cleared out of band) so we never reference a dead portfolio.
+      activePfIds = parsed.filter(id => pfRegistry[id]);
+    }
+  } catch (e) {
+    console.error('[persistence] Failed to load activePfIds', e);
+  }
+}
 
 function newPfId() { return 'pf_' + Date.now().toString(36); }
 
@@ -1742,7 +1943,7 @@ function getActiveTransactions() {
   const txns = [];
   ids.forEach(id => {
     const pf = pfRegistry[id];
-    if (pf) pf.transactions.forEach(t => txns.push({ ...t, _pfId: id }));
+    if (pf) pf.transactions.forEach(t => { if (!t._txnId) t._txnId = newTxnId(); txns.push({ ...t, _pfId: id }); });
   });
   return txns;
 }
@@ -1814,11 +2015,34 @@ function renamePortfolio(id, newName) {
   refreshImportPfSelect();
 }
 
-// Set a portfolio's transactions (from CSV parse)
+// Generate a stable, unique transaction ID. Not derived from array position —
+// positions shift on sort/filter/delete, so an index-based ID would silently
+// drift and could mismatch the wrong row.
+let _txnIdCounter = 0;
+function newTxnId() { return 'txn_' + Date.now().toString(36) + '_' + (_txnIdCounter++).toString(36); }
+
+// Set a portfolio's transactions (from CSV parse, or any bulk replace).
+// Backfills _txnId on any transaction that doesn't already have one —
+// this covers fresh CSV imports and is a no-op for transactions that were
+// already assigned an id in a prior session (id survives the round trip
+// through localStorage, see savePfRegistry/loadPfRegistry below).
 function setPfTransactions(id, txns) {
   if (!pfRegistry[id]) return;
+  txns.forEach(t => { if (!t._txnId) t._txnId = newTxnId(); });
   pfRegistry[id].transactions = txns;
   savePfRegistry();
+}
+
+// Resolve a transaction by its stable id to {pfId, index} — the actual
+// location in pfRegistry, regardless of how it's currently sorted/filtered
+// in whatever derived array the UI happens to be rendering.
+// Returns null if the id isn't found in any portfolio (e.g. already deleted).
+function findTxnLocation(txnId) {
+  for (const pfId of Object.keys(pfRegistry)) {
+    const idx = pfRegistry[pfId].transactions.findIndex(t => t._txnId === txnId);
+    if (idx >= 0) return { pfId, index: idx };
+  }
+  return null;
 }
 
 // Toggle a portfolio in/out of the active selection
@@ -1964,7 +2188,7 @@ let alerts = [];
 // Corporate actions: [{sym, date, type, ratio, notes}]
 let corporateActions = JSON.parse(localStorage.getItem('corporateActions') || '[]');
 function saveCorporateActions() { localStorage.setItem('corporateActions', JSON.stringify(corporateActions)); }
-let editingTxnIndex = -1;
+let editingTxnId = null; // _txnId of the transaction being edited, or null when adding a new one
 
 // ─── UTILS ────────────────────────────────────────────────────────────
 function fmt(n, dec=0) { return n.toLocaleString('en-SG',{minimumFractionDigits:dec,maximumFractionDigits:dec}); }
@@ -1987,7 +2211,7 @@ function closeModal(id) { document.getElementById(id).classList.remove('open'); 
 // ─── TAB SWITCHING ────────────────────────────────────────────────────
 const PAGE_TITLES = {
   dashboard:'Dashboard', holdings:'Holdings', performance:'Performance',
-  risk:'Risk & Drawdown', exposure:'Exposure', dividends:'Dividends',
+  risk:'Risk & Drawdown', exposure:'Exposure & Analysis', dividends:'Dividends',
   transactions:'Transactions', realised:'Realised P&L',
   corpactions:'Corp Actions', alerts:'Alerts', import:'Import / Settings'
 };
@@ -2008,7 +2232,7 @@ function switchTab(id, el) {
   // Update page title
   const titleEl = document.getElementById('page-title');
   if (titleEl) titleEl.textContent = PAGE_TITLES[id] || id;
-  if (id === 'import') { refreshImportPfSelect(); renderStaticPriceList(); renderClassificationEditor(); }
+  if (id === 'import') { refreshImportPfSelect(); renderStaticPriceList(); renderClassificationEditor(); renderTagsEditor(); }
 }
 
 // ─── SIDEBAR EXPAND / COLLAPSE ────────────────────────────────────────
@@ -2070,7 +2294,43 @@ function parseCSV(text, filename) {
   // Detect separator: tab takes priority, then comma
   const sep = lines[0].includes('\t') ? '\t' : ',';
 
-  const hdrs = lines[0].split(sep).map(h => h.trim().toLowerCase().replace(/"/g,''));
+  // Naive `.split(sep)` breaks on any separator character that appears
+  // inside a quoted field -- e.g. a classification value like
+  // "Corp Action - MCB Redemption (2021 Tranche, 2nd Partial)" gets sliced
+  // into two columns at that internal comma, silently shifting every
+  // column after it for that row. Found 2026-06-26 while wiring up
+  // Export-to-CSV: 7 real rows in the user's actual CSV (C6L-MCB MCB
+  // redemption/subscription rows, one UD1U rights-allocation note) were
+  // being corrupted on every import, invisibly, because classification/
+  // net_cash_flow weren't read at all before today so nobody could see the
+  // misalignment. This tokenizer is quote-aware: a separator inside a
+  // "..." span is treated as literal data, not a column boundary, and a
+  // doubled "" inside a quoted span is unescaped to a single ". Used for
+  // both the header row and every data row below.
+  function splitCSVLine(line, sepChar) {
+    const out = [];
+    let cur = '';
+    let inQuotes = false;
+    for (let i = 0; i < line.length; i++) {
+      const c = line[i];
+      if (inQuotes) {
+        if (c === '"') {
+          if (line[i + 1] === '"') { cur += '"'; i++; } // escaped quote
+          else inQuotes = false;
+        } else {
+          cur += c;
+        }
+      } else {
+        if (c === '"') inQuotes = true;
+        else if (c === sepChar) { out.push(cur); cur = ''; }
+        else cur += c;
+      }
+    }
+    out.push(cur);
+    return out;
+  }
+
+  const hdrs = splitCSVLine(lines[0], sep).map(h => h.trim().toLowerCase());
 
   // Flexible column matching — covers both StocksCafe and your custom format
   function findCol(...keywords) {
@@ -2091,6 +2351,13 @@ function parseCSV(text, filename) {
     fees:     hdrs.findIndex(h => (h === 'fees' || h === 'commission' || h === 'charges') && h !== hdrs[totalCol]),
     total:    totalCol,
     notes:    findCol('notes', 'remarks', 'memo'),
+    // Annotation columns from the user's enrichment workflow — not consumed
+    // by any app logic, but previously silently dropped on import even
+    // though the source CSV carries real hand-curated corporate-action
+    // history here. Captured now purely so Export-to-CSV can round-trip
+    // them without re-fabricating anything.
+    classification: findCol('classification'),
+    netCashFlow:     findCol('net_cash_flow', 'net cash flow'),
   };
 
   if (colIdx.symbol < 0 || colIdx.date < 0) {
@@ -2107,7 +2374,7 @@ function parseCSV(text, filename) {
   for (let i = 1; i < lines.length; i++) {
     const raw = lines[i];
     if (!raw.trim()) continue;
-    const row = raw.split(sep).map(c => c.trim().replace(/"/g,''));
+    const row = splitCSVLine(raw, sep).map(c => c.trim());
 
     const actionRaw = colIdx.action >= 0 ? (row[colIdx.action] || '1') : '1';
     const actionN   = parseFloat(actionRaw);
@@ -2136,6 +2403,13 @@ function parseCSV(text, filename) {
     }
     const ccy    = colIdx.currency >= 0 ? (row[colIdx.currency] || 'SGD').toUpperCase() : 'SGD';
     const notes  = colIdx.notes    >= 0 ? (row[colIdx.notes]    || '') : '';
+    // Pass through as-is if present; blank string if the column doesn't
+    // exist in this CSV (e.g. a plain StocksCafe export with no enrichment).
+    // Never fabricated — a transaction added in-app via the modal will also
+    // end up with these blank, which is correct since there's nothing to
+    // carry through for a row that was never classified.
+    const classification = colIdx.classification >= 0 ? (row[colIdx.classification] || '') : '';
+    const netCashFlow     = colIdx.netCashFlow    >= 0 ? (row[colIdx.netCashFlow]    || '') : '';
 
     if (!sym || !dt || isNaN(dt.getTime())) { skipped.push(i+1); continue; }
 
@@ -2146,7 +2420,7 @@ function parseCSV(text, filename) {
       total: totalAmt > 0 ? totalAmt : 0, // actual total from CSV
       ccy, isFee,
       action: isFee ? 'fees' : isSell ? 'sell' : 'buy',
-      notes
+      notes, classification, netCashFlow
     });
   }
 
@@ -2279,11 +2553,12 @@ const CLASSIFICATION_SEED = {
   'ES3':      { type:'etf',   sector:'ETFs' },
   'G3B':      { type:'etf',   sector:'ETFs' },
   'O9P':      { type:'etf',   sector:'ETFs' },
-  'OV8':      { type:'etf',   sector:'ETFs' },
   // SGX Bonds
+  'C6L-MCB':  { type:'bond',  sector:'Fixed Income' },
+  'RMRB':     { type:'bond',  sector:'Fixed Income' },
   'V7AB':     { type:'bond',  sector:'Fixed Income' },
-  'VT1':      { type:'bond',  sector:'Fixed Income' },
-  'VT2W':     { type:'bond',  sector:'Fixed Income' },
+  'VT1':      { type:'stock', sector:'Other' },
+  'VT2W':     { type:'stock', sector:'Other' },
   'YA1B':     { type:'bond',  sector:'Fixed Income' },
   // SGX Banks
   'D05':      { type:'stock', sector:'Banks & Financials' },
@@ -2305,11 +2580,12 @@ const CLASSIFICATION_SEED = {
   'MZH':      { type:'stock', sector:'Telecom & Technology' },
   'Z74':      { type:'stock', sector:'Telecom & Technology' },
   // SGX Healthcare & Consumer
+  'OV8':      { type:'stock', sector:'Healthcare & Consumer' },
   'S08':      { type:'stock', sector:'Healthcare & Consumer' },
   'Y03':      { type:'stock', sector:'Healthcare & Consumer' },
   // LSE
   'AV':       { type:'stock', sector:'Banks & Financials' },
-  'LAND':     { type:'stock', sector:'Healthcare & Consumer' },
+  'LAND':     { type:'reit',  sector:'REITs — Diversified' },
   'STAN':     { type:'stock', sector:'Banks & Financials' },
   // HKEX
   '3988':     { type:'stock', sector:'Banks & Financials' },
@@ -2353,6 +2629,41 @@ function saveClassificationOverrides(obj) {
   localStorage.setItem(CLASSIFICATION_KEY, JSON.stringify(delta));
 }
 let classificationOverrides = loadClassificationOverrides();
+
+// ─── HOLDINGS TAGS (Piece 3 — Exposure tab filter) ───────────────────
+// Free-text, user-defined, multiple tags per symbol. Unlike
+// classificationOverrides there's no seed data — tags are entirely
+// user-authored, so the whole object is the delta; nothing to diff against.
+// Shape: { [sym]: ['tag one', 'tag two', ...] }
+const TAGS_KEY = 'holdingTags';
+function loadHoldingTags() {
+  try { return JSON.parse(localStorage.getItem(TAGS_KEY) || '{}'); } catch { return {}; }
+}
+function saveHoldingTags(obj) { localStorage.setItem(TAGS_KEY, JSON.stringify(obj)); }
+let holdingTags = loadHoldingTags();
+
+function getHoldingTags(sym) { return holdingTags[sym.toUpperCase()] || []; }
+
+function setHoldingTagsFromString(sym, rawString) {
+  const s = sym.toUpperCase();
+  const tags = rawString.split(',').map(t => t.trim()).filter(Boolean);
+  // Dedupe case-insensitively but preserve the first-seen casing, so "REIT
+  // sleeve" and "reit sleeve" don't silently create two near-identical tags
+  const seen = new Set();
+  const deduped = [];
+  tags.forEach(t => { const k = t.toLowerCase(); if (!seen.has(k)) { seen.add(k); deduped.push(t); } });
+  if (deduped.length) holdingTags[s] = deduped;
+  else delete holdingTags[s]; // empty input clears tags for this symbol entirely
+  saveHoldingTags(holdingTags);
+}
+
+// All distinct tags currently in use across all holdings, for building the
+// filter chip bar. Sorted case-insensitively for a stable, predictable order.
+function getAllDistinctTags() {
+  const set = new Set();
+  Object.values(holdingTags).forEach(tags => tags.forEach(t => set.add(t)));
+  return [...set].sort((a, b) => a.localeCompare(b, undefined, { sensitivity: 'base' }));
+}
 
 function guessType(sym, exch) {
   const s = sym.toUpperCase();
@@ -2626,6 +2937,37 @@ if (!localStorage.getItem(RESOLVED_NODATA_KEY)) {
   saveResolvedNoDataSymbols(resolvedNoDataSymbols);
 }
 
+// Second batch, confirmed by the user 2026-06-26, all fully closed positions
+// whose tickers are dead on Yahoo. Same guarantee as SK7 above: each was
+// hand-verified by the user, not just inferred from a 404. Uses its own
+// one-time seed flag (RESOLVED_NODATA_BATCH2_KEY) rather than piggybacking
+// on RESOLVED_NODATA_KEY, since that key already exists from the SK7 seed
+// above and would otherwise skip this batch entirely on existing installs.
+//   A68U — converted 1:1 to HMN (2020-01-01), HMN already fetches fine.
+//   K2LU — delisted, cash+stock merger into ESR-REIT (2022-04-28).
+//   J91U — converted 0.1:1 to 9A4U (2025-04-30), 9A4U already fetches fine.
+//   S51  — consolidated 1:20 to 5E2 (2024-05-07), 5E2 already fetches fine.
+//   ACV, T39, LRDR, VTA, VT1 — confirmed delisted, fully closed positions.
+//   VT2W — warrants; Yahoo does not carry chart data for SGX warrants.
+//   C6L-MCB — internal symbol for a mandatory convertible bond, fully
+//     redeemed (last redemption 2024-06-24); was never a real Yahoo ticker.
+const RESOLVED_NODATA_BATCH2_KEY = 'resolvedNoDataSymbolsBatch2Seeded';
+if (!localStorage.getItem(RESOLVED_NODATA_BATCH2_KEY)) {
+  ['A68U','K2LU','J91U','S51','ACV','T39','LRDR','VTA','VT1','VT2W','C6L-MCB']
+    .forEach(s => resolvedNoDataSymbols.add(s));
+  saveResolvedNoDataSymbols(resolvedNoDataSymbols);
+  localStorage.setItem(RESOLVED_NODATA_BATCH2_KEY, '1');
+}
+
+// V7AB (Astrea 7A1 4.125% 2035) and YA1B (Astrea 9 Class A-1 3.4% 2040) are
+// NOT added here even though they also 404 on Yahoo — these are actively
+// held bonds, not closed positions. resolvedNoDataSymbols only suppresses
+// the fetch; it doesn't supply a price, so silencing these the same way
+// would leave them valued at a stale last-transaction price forever with
+// no prompt to update it. They need a deliberate staticPriceOverride entry
+// instead (via the Tickers/price-override UI) so the dashboard reflects an
+// intentional, current valuation rather than a silently-stale one.
+
 // Static price overrides — for tickers not on Yahoo Finance (e.g. SGX bonds, prefs).
 // Persisted in localStorage. Shape: { [sym]: { price, currency, note } }
 const STATIC_PRICE_KEY = 'staticPriceOverrides';
@@ -2762,6 +3104,33 @@ function lastBusinessClose(cached, exch) {
   return cached.closes[cached.closes.length - 1];
 }
 
+// ── Render-pipeline hardening ────────────────────────────────────────
+// processPortfolio() calls ~17 render functions back-to-back. In plain JS,
+// an uncaught exception in any ONE of them aborts the entire rest of the
+// chain — every function after the failure point silently never runs,
+// with no error visible to the user, just a dashboard that's blank or
+// stuck on stale data past whichever tab happened to fail.
+//
+// Confirmed concretely: renderCharts()'s first action is `new Chart(...)`;
+// if Chart.js fails to load for any reason (CDN blocked, slow network,
+// ad-blocker), that throws immediately and silently takes down every
+// downstream render — Holdings, Risk, Exposure & Analysis, Performance,
+// Dividends, Transactions, Realised, Corp Actions, and Alerts — none of
+// which are actually broken themselves.
+//
+// safeRender() isolates each call: a failure is caught, logged to the
+// console with the function's name, and execution continues to the next
+// call in the chain. This does NOT make every function bulletproof in
+// isolation — e.g. if renderDividends() throws before publishing
+// divYTD/divProjYear, renderDashboardDivKPIs() (which depends on them,
+// see comment at its call site) may still read stale/undefined values
+// rather than the fresh ones. What it DOES guarantee is that one broken
+// piece can only ever cost you that one piece, never the other sixteen.
+function safeRender(fn, label) {
+  try { fn(); }
+  catch (e) { console.error(`[processPortfolio] ${label} failed:`, e); }
+}
+
 function processPortfolio(skipFetch = false) {
   // Invalidate computeDividendsSplit cache — transactions or prices may have changed
   clearDivSplitCache();
@@ -2870,8 +3239,8 @@ function processPortfolio(skipFetch = false) {
   portfolio.totalPnl = totalVal - totalCost;
   portfolio.pnlPct   = totalCost > 0 ? (totalVal - totalCost) / totalCost * 100 : 0;
 
-  buildNavSeries();
-  loadManualDeclarations(); // merge manual entries into divCache BEFORE any computeDividendsSplit
+  safeRender(buildNavSeries, 'buildNavSeries');
+  safeRender(loadManualDeclarations, 'loadManualDeclarations'); // merge manual entries into divCache BEFORE any computeDividendsSplit
                             // calls below — updateKPIs(), renderRealised() etc. all read
                             // computeDividendsSplit, and divSplitCache is only safe to populate
                             // once divCache reflects the merged manual dividends for this render
@@ -2881,38 +3250,44 @@ function processPortfolio(skipFetch = false) {
                             // saw merged totals — causing "Closed positions" vs "Total realised
                             // return" to diverge by exactly the value of any manually-declared
                             // realised dividends.
-  updateKPIs();
-  renderCharts();
-  renderHoldings();
-  renderRisk();
-  renderExposure();
-  renderPerformance();
-  renderDashboardTopHoldings();
-  renderDashboardCcyBars();
-  renderDividends();        // must run before renderDashboardDivKPIs so divYTD/divProjYear are published
-  renderDashboardDivKPIs(); // now reads the correct divYTD and divProjYear from renderDividends
-  renderTransactions();
-  renderTxnCashFlowChart();
-  renderRealised();
-  renderCorpActions();
-  renderAlerts();
-  // Refresh classification editor if Import tab is open
-  if (typeof renderClassificationEditor === 'function') renderClassificationEditor();
+  safeRender(updateKPIs, 'updateKPIs');
+  safeRender(renderCharts, 'renderCharts');
+  safeRender(renderHoldings, 'renderHoldings');
+  safeRender(renderRisk, 'renderRisk');
+  safeRender(renderExposure, 'renderExposure');
+  safeRender(renderPerformance, 'renderPerformance');
+  safeRender(renderDashboardTopHoldings, 'renderDashboardTopHoldings');
+  safeRender(renderDashboardCcyBars, 'renderDashboardCcyBars');
+  safeRender(renderDividends, 'renderDividends');        // must run before renderDashboardDivKPIs so divYTD/divProjYear are published
+  safeRender(renderDashboardDivKPIs, 'renderDashboardDivKPIs'); // now reads the correct divYTD and divProjYear from renderDividends
+  safeRender(renderTransactions, 'renderTransactions');
+  safeRender(renderTxnCashFlowChart, 'renderTxnCashFlowChart');
+  safeRender(renderRealised, 'renderRealised');
+  safeRender(renderCorpActions, 'renderCorpActions');
+  safeRender(renderAlerts, 'renderAlerts');
+  // Refresh classification/tags editors if Import tab is open
+  if (typeof renderClassificationEditor === 'function') safeRender(renderClassificationEditor, 'renderClassificationEditor');
+  if (typeof renderTagsEditor === 'function') safeRender(renderTagsEditor, 'renderTagsEditor');
   // Wire symbol clicks after all tables are rendered
   setTimeout(wireSymbolClicks, 0);
 
-  document.getElementById('portfolio-badge').textContent = `${Object.keys(holdings).length} positions`;
-  document.getElementById('last-updated').textContent = 'Updated ' + new Date().toLocaleString('en-SG', {day:'numeric', month:'short', hour:'2-digit', minute:'2-digit'});
-  document.getElementById('last-updated').style.display = '';
-  // Update header subtitle
-  const hSub = document.getElementById('header-subtitle');
-  if (hSub) hSub.textContent = Object.keys(holdings).length + ' positions · updated ' + new Date().toLocaleString('en-SG', {day:'numeric', month:'short', hour:'2-digit', minute:'2-digit'});
-  document.getElementById('btn-tickers').style.display = '';
-  document.getElementById('btn-refetch').style.display = '';
+  safeRender(() => {
+    document.getElementById('portfolio-badge').textContent = `${Object.keys(holdings).length} positions`;
+    document.getElementById('last-updated').textContent = 'Updated ' + new Date().toLocaleString('en-SG', {day:'numeric', month:'short', hour:'2-digit', minute:'2-digit'});
+    document.getElementById('last-updated').style.display = '';
+    // Update header subtitle
+    const hSub = document.getElementById('header-subtitle');
+    if (hSub) hSub.textContent = Object.keys(holdings).length + ' positions · updated ' + new Date().toLocaleString('en-SG', {day:'numeric', month:'short', hour:'2-digit', minute:'2-digit'});
+    document.getElementById('btn-tickers').style.display = '';
+    document.getElementById('btn-refetch').style.display = '';
+  }, 'badge/header update');
 
+  safeRender(checkBackupReminder, 'checkBackupReminder');
 
-
-  // Kick off price fetch unless caller already has prices loaded
+  // Kick off price fetch unless caller already has prices loaded.
+  // Deliberately OUTSIDE safeRender's try/catch and last in the function —
+  // this is the most consequential side effect in processPortfolio(), and
+  // it must fire regardless of whether any rendering above succeeded.
   if (!skipFetch) fetchAllPrices();
 }
 
@@ -3130,6 +3505,14 @@ async function fetchAllPrices() {
       if (!ticker) return false; // SSB/bonds
       if (staticPriceOverrides[sym]?.price > 0) return false; // manual price set — skip Yahoo
       if (priceCache[ticker]?.ok) return false; // already fetched this session
+      // Known-delisted/no-data tickers (e.g. SK7 post-merger) always 404 on
+      // Yahoo. priceCache[ticker]?.ok stays false after a 404, so without this
+      // check these get silently re-queued and re-fetched on EVERY single
+      // fetchAllPrices() call (including every transaction add/edit/delete),
+      // costing a real network round-trip each time for a result that will
+      // never change. resolvedNoDataSymbols already exists for buildNavSeries
+      // — this is the missing consumer that actually stops the refetch.
+      if (resolvedNoDataSymbols.has(sym)) return false;
       return true;
     });
 
@@ -3151,6 +3534,7 @@ async function fetchAllPrices() {
     const ticker = getYahooTicker(sym, meta.exch);
     if (!ticker) return;                       // SSB/bond — no Yahoo data
     if (priceCache[ticker]?.ok) return;        // already cached this session
+    if (resolvedNoDataSymbols.has(sym)) return; // known-delisted, always 404 — see note above
     if (work.find(w => w.ticker === ticker)) return; // already in queue
     work.push({ sym, ticker, _closedPosition: true });
   });
@@ -3232,7 +3616,7 @@ async function fetchAllPrices() {
   setTimeout(wireSymbolClicks, 0);
 
   // Fetch declared dividend announcements (SGX + Yahoo quoteSummary)
-  fetchAnnouncedDividends();
+  fetchAnnouncedDividends(false); // false = allow throttle; manual Refresh buttons call with no arg (forced)
 
   // Show summary
   const succeeded   = work.length - failed.length;
@@ -3461,6 +3845,50 @@ function resetClassifications() {
   processPortfolio(true);
   renderClassificationEditor();
   toast('Classifications reset to defaults', 'success');
+}
+
+function renderTagsEditor() {
+  const el = document.getElementById('tags-editor');
+  if (!el) return;
+
+  const syms = Object.keys(portfolio.holdings).sort();
+  if (!syms.length) {
+    el.innerHTML = '<p style="font-size:12px;color:var(--text-secondary)">No holdings loaded yet.</p>';
+    return;
+  }
+
+  const rows = syms.map(sym => {
+    const h = portfolio.holdings[sym];
+    const tags = getHoldingTags(sym);
+    const name = nameCache[sym] || '';
+    const nameCell = name
+      ? `<span title="${escHtml(name)}">${escHtml(name)}</span>`
+      : `<span style="color:var(--border-med)">—</span>`;
+    return `<tr>
+      <td style="font-family:monospace;font-size:12px;font-weight:500;white-space:nowrap">${sym}</td>
+      <td style="color:var(--text-secondary);font-size:11px;max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${nameCell}</td>
+      <td style="color:var(--text-secondary);font-size:11px">${h.exch}</td>
+      <td style="min-width:240px">
+        <input type="text" value="${escHtml(tags.join(', '))}" placeholder="e.g. core income, REIT sleeve"
+          onblur="setHoldingTagsFromString('${sym}', this.value)"
+          onkeydown="if(event.key==='Enter'){this.blur();}"
+          style="font-size:11px;padding:4px 8px;border-radius:5px;border:0.5px solid var(--border-med);background:var(--bg-primary);color:var(--text-primary);width:100%">
+      </td>
+    </tr>`;
+  }).join('');
+
+  el.innerHTML = `
+    <div style="overflow-x:auto">
+      <table style="width:100%;border-collapse:collapse;font-size:12px">
+        <thead><tr>
+          <th style="text-align:left;padding:6px 8px;font-size:11px;color:var(--text-secondary);text-transform:uppercase;letter-spacing:0.04em;border-bottom:0.5px solid var(--border)">Symbol</th>
+          <th style="text-align:left;padding:6px 8px;font-size:11px;color:var(--text-secondary);text-transform:uppercase;letter-spacing:0.04em;border-bottom:0.5px solid var(--border)">Name</th>
+          <th style="text-align:left;padding:6px 8px;font-size:11px;color:var(--text-secondary);text-transform:uppercase;letter-spacing:0.04em;border-bottom:0.5px solid var(--border)">Exch</th>
+          <th style="text-align:left;padding:6px 8px;font-size:11px;color:var(--text-secondary);text-transform:uppercase;letter-spacing:0.04em;border-bottom:0.5px solid var(--border)">Tags</th>
+        </tr></thead>
+        <tbody>${rows}</tbody>
+      </table>
+    </div>`;
 }
 
 function openTickerModal() {
@@ -4770,7 +5198,7 @@ function renderDashboardUpcoming() {
 
   const now = new Date();
 
-  // Only show entries from announcedDivCache filtered to current portfolio.
+  // Primary source: announcedDivCache (dividends.sg + manual entries).
   const activeSymsDash = new Set(Object.keys(portfolio.holdings));
   const entries = {};
   Object.entries(announcedDivCache).forEach(([sym, entry]) => {
@@ -4780,6 +5208,13 @@ function renderDashboardUpcoming() {
   // Show confirmed (dividends.sg) and manual entries only — no projections.
   // "Not yet paid" rather than "ex-date in future": once ex-date passes the
   // dividend is locked in but still owed until pay date.
+  //
+  // This filter is the single source of truth for "is this still owed" —
+  // it is re-applied fresh on every render against the current Date(), so
+  // an entry cannot keep showing past its pay date just because it sat in
+  // announcedDivCache from an earlier fetch (e.g. fetched while genuinely
+  // upcoming, then never refreshed again after pay date passed — the cache
+  // itself is never proactively pruned, only overwritten on the next fetch).
   const upcoming = Object.values(entries)
     .filter(e => (e.payDate ? e.payDate > now : e.exDate > now) && (e.source === 'dividends.sg' || e.source === 'manual'))
     .sort((a, b) => {
@@ -4789,14 +5224,30 @@ function renderDashboardUpcoming() {
       return aDate - bDate;
     });
 
-  if (!upcoming.length) {
+  // Fallback: Yahoo-sourced entries for symbols dividends.sg hasn't covered
+  // yet — see getYahooFallbackUpcomingDivs() for why this exists and what
+  // it can/can't guarantee (short grace window, not multi-week advance notice).
+  const yahooFallbackDash = getYahooFallbackUpcomingDivs();
+
+  // Sort the MERGED list by pay date (falling back to ex date) — sorting
+  // each source separately and concatenating (previous bug, fixed
+  // 2026-06-27) put every Yahoo-fallback entry after every dividends.sg
+  // entry regardless of actual date, e.g. Y03 paying sooner than most
+  // dividends.sg entries still sorted to the bottom of the card.
+  const combinedDash = [...upcoming, ...yahooFallbackDash].sort((a, b) => {
+    const aDate = a.payDate || a.exDate;
+    const bDate = b.payDate || b.exDate;
+    return aDate - bDate;
+  });
+
+  if (!combinedDash.length) {
     el.innerHTML = `<div style="font-size:12px;color:var(--text-secondary);padding:8px 0">No dividends expected in the next 30 days.<br><span style="font-size:11px">Click <strong>↻</strong> above to fetch live announcements.</span></div>`;
     if (elTot) elTot.style.display = 'none';
     return;
   }
 
   let totalGross = 0;
-  el.innerHTML = upcoming.map(e => {
+  el.innerHTML = combinedDash.map(e => {
     totalGross += e.grossSGD;
     const exStr     = e.exDate.toISOString().slice(0,10);
     const payDate   = e.payDate || null;
@@ -4807,6 +5258,8 @@ function renderDashboardUpcoming() {
     const urgency    = daysToPayd <= 7 ? 'var(--red)' : daysToPayd <= 30 ? 'var(--amber)' : 'var(--text-secondary)';
     const badge = e.source === 'manual'
       ? `<span class="price-badge" style="margin-left:4px;background:rgba(83,74,183,0.12);color:var(--purple)">manual</span>`
+      : e.source === 'yahoo'
+      ? `<span class="price-badge" style="margin-left:4px;background:rgba(186,117,23,0.12);color:var(--amber)" title="Source: Yahoo Finance only — dividends.sg has not posted this yet. May already be paid.">yahoo</span>`
       : `<span class="price-badge price-live" style="margin-left:4px">declared</span>`;
     const payLabel = payDate
       ? `pay&nbsp;${payStr}&nbsp;(${daysToPayd}d)`
@@ -5552,13 +6005,13 @@ function renderHoldings() {
   const q = (document.getElementById('holdings-search').value||'').toLowerCase();
   let items = Object.values(portfolio.holdings);
   if (filter !== 'all') items = items.filter(h => h.type === filter);
-  if (q) items = items.filter(h => h.sym.toLowerCase().includes(q));
+  if (q) items = items.filter(h => h.sym.toLowerCase().includes(q) || symName(h.sym).toLowerCase().includes(q));
   if (sortBy === 'pnl')    items.sort((a,b)=>b.pnl-a.pnl);
   else if (sortBy==='return') items.sort((a,b)=>b.pnlPct-a.pnlPct);
   else if (sortBy==='name')   items.sort((a,b)=>a.sym.localeCompare(b.sym));
   else items.sort((a,b)=>b.weight-a.weight);
   const tbody = document.getElementById('holdings-body');
-  if (!items.length) { tbody.innerHTML='<tr><td colspan="11" style="text-align:center;padding:32px;color:var(--text-secondary)">No holdings found.</td></tr>'; return; }
+  if (!items.length) { tbody.innerHTML='<tr><td colspan="12" style="text-align:center;padding:32px;color:var(--text-secondary)">No holdings found.</td></tr>'; return; }
 
   // Price column header badge: "EOD close" when prices fetched, "est" otherwise.
   // All value/P&L calculations use h.curPrice = lastBusinessClose (EOD).
@@ -5577,6 +6030,8 @@ function renderHoldings() {
   const pillClass = { stock:'pill-stock', etf:'pill-etf', reit:'pill-reit', bond:'pill-bond' };
   tbody.innerHTML = items.map(h => {
     const pc = h.pnl>=0?'up':'down';
+    const dayCls = h.eodDayChg === null ? '' : h.eodDayChg >= 0 ? 'up' : 'down';
+    const dayTxt = h.eodDayChg === null ? '—' : `${h.eodDayChg>=0?'+':''}${h.ccy} ${Math.abs(h.eodDayChg).toFixed(3)}`;
     return `<tr>
       <td>${symWithName(h.sym)}</td>
       <td style="color:var(--text-secondary)">${h.exch}</td>
@@ -5584,6 +6039,7 @@ function renderHoldings() {
       <td style="text-align:right">${fmt(h.shares)}</td>
       <td style="text-align:right">${h.ccy} ${h.avgCost.toFixed(3)}</td>
       <td style="text-align:right">${h.ccy} ${h.curPrice.toFixed(3)}${h.priceSource==='manual'?` <span class="price-badge" style="background:rgba(83,74,183,0.12);color:var(--purple)" title="Manual price override — not from Yahoo Finance">manual</span>`:''}</td>
+      <td style="text-align:right" class="${dayCls}">${dayTxt}</td>
       <td style="text-align:right">S$${fmt(h.valueSGD)}</td>
       <td style="text-align:right" class="${pc}">${h.pnl>=0?'+':'-'}S$${fmt(Math.abs(h.pnl))}</td>
       <td style="text-align:right" class="${pc}">${fmtPct(h.pnlPct)}</td>
@@ -5600,6 +6056,17 @@ function renderHoldings() {
   const allHoldings = Object.values(portfolio.holdings);
   renderHoldingsSummary(allHoldings);
   renderEodPriceTable(allHoldings);
+
+  // Re-wire symbol-click-to-detail-tab links. Fixed 2026-06-26: this table
+  // has its own search/filter/sort controls (search box, type filter, sort
+  // dropdown — see the onchange/oninput handlers above) that call
+  // renderHoldings() directly, bypassing processPortfolio()'s own
+  // wireSymbolClicks() call at the end of its render sequence. Every fresh
+  // <span class="symbol"> this function creates needs its click handler
+  // re-attached locally rather than relying on an external caller to
+  // remember to do it — that's what was silently breaking the link the
+  // moment a user searched, filtered, or re-sorted Holdings.
+  setTimeout(wireSymbolClicks, 0);
 }
 
 // ─── CURRENCY SUMMARY TABLE ───────────────────────────────────────────
@@ -5947,6 +6414,11 @@ function renderEodPriceTable(allHoldings) {
   if (footer) footer.innerHTML =
     `<span>${eodItems.length} position${eodItems.length!==1?'s':''} shown${filteredNote}${noEodNote}</span>`
     + `<span>EOD total: S$${fmt(eodTotal)} &nbsp;|&nbsp; P&amp;L: <span class="${eodPnlTot>=0?'up':'down'}">${eodPnlTot>=0?'+':'-'}S$${fmt(Math.abs(eodPnlTot))}</span></span>`;
+
+  // Same fix as renderHoldings() (2026-06-26) — this table has its own
+  // direct search/filter/sort controls that can call it without going
+  // through renderHoldings() first, so it needs its own re-wire too.
+  setTimeout(wireSymbolClicks, 0);
 }
 
 // ─── PERFORMANCE ──────────────────────────────────────────────────────
@@ -6297,10 +6769,23 @@ function computeDividendsSplit(sym, sinceDate) {
   let realisedNat    = 0;  // local-currency total of realised dividends
   let unrealisedNat  = 0;  // local-currency total of unrealised (still-held) dividends
 
-  // Apply trailing-period filter if requested
-  const dividendsToProcess = sinceDate
+  // Apply trailing-period filter if requested, AND always exclude future
+  // ex-dates. Fixed 2026-06-26: Yahoo's dividend events payload sometimes
+  // includes upcoming confirmed ex-dates (projections, not yet received
+  // income) — historyRows (the Dividends tab's "Total received (all
+  // time)" KPI) already excludes these via `if (date > now) return;`, but
+  // this function never did, so every consumer of computeDividendsSplit
+  // (the Holdings currency-summary card, the Realised tab's dividend
+  // columns, and the Exposure tab's exchange summary card) was counting a
+  // small amount of not-yet-received projected income as if it were
+  // already received — surfaced when the exchange card's "all time"
+  // dividend total was compared directly against the Dividends tab's KPI
+  // and came out S$2,429 higher.
+  const now = new Date();
+  const dividendsToProcess = (sinceDate
     ? cached.dividends.filter(d => d.date >= sinceDate)
-    : cached.dividends;
+    : cached.dividends
+  ).filter(d => d.date <= now);
 
   dividendsToProcess.forEach(({ date, amount }) => {
     const exDateStr = date.toISOString().slice(0,10);
@@ -6524,33 +7009,25 @@ function renderRealisedCcySummary(summaryByTicker, soldSyms) {
   if (sub) sub.textContent = `${totCount} ticker${totCount!==1?'s':''} with sell activity · all amounts in SGD at transaction-date FX${partialNote}`;
 }
 
-function renderRealised() {
-  const { sellRows, open } = computeRealisedPnL();
-  // Newest sell first
-  const sortedSells = [...sellRows].sort((a,b) => b.sellDate - a.sellDate);
-  const openList    = Object.values(open).sort((a,b) => b.totalReturnSGD - a.totalReturnSGD);
-
-  // ── KPIs ──────────────────────────────────────────────────────────
-  const totalRealised = sellRows.reduce((s,r) => s + r.realisedSGD, 0);
-  // Realised dividends: sum computeDividendsSplit.realised for each unique sold symbol
-  const soldSyms = [...new Set(sellRows.map(r => r.sym))];
-  const totalDivAll = soldSyms.reduce((s, sym) => {
-    return s + (computeDividendsSplit(sym).realised || 0);
-  }, 0);
-  const totalRealisedReturn = totalRealised + totalDivAll;
-
-  document.getElementById('rl-realised').textContent  = (totalRealised>=0?'+':'') + 'S$' + fmt(Math.abs(totalRealised));
-  document.getElementById('rl-realised').className    = 'metric-value ' + (totalRealised>=0?'up':'down');
-  document.getElementById('rl-dividends').textContent = 'S$' + fmt(totalDivAll);
-  document.getElementById('rl-total').textContent     = (totalRealisedReturn>=0?'+':'') + 'S$' + fmt(Math.abs(totalRealisedReturn));
-  document.getElementById('rl-total').className       = 'metric-value ' + (totalRealisedReturn>=0?'up':'down');
-
-  const countEl = document.getElementById('rl-sell-count');
-  if (countEl) countEl.textContent = `${sortedSells.length} sell transaction${sortedSells.length!==1?'s':''}`;
-
-  // ── Closed positions summary table ────────────────────────────────────
-  // One row per ticker — aggregates all sell transactions for that symbol.
-  // Only shown for fully-closed symbols (shares remaining = 0).
+// ── Closed positions aggregation (shared) ─────────────────────────────
+// Two functions, split deliberately because they serve different
+// consumers that need different shapes of the same underlying data:
+//
+//   buildSellSummaryByTicker(sellRows) — raw { [sym]: {...} } map, ALL
+//     sold symbols including partial sells of still-open positions. Used
+//     by renderRealisedCcySummary() for the currency-summary card, which
+//     needs every sold symbol (not just fully-closed ones) so its totals
+//     match the KPI cards exactly.
+//
+//   getClosedPositionsSummary(sellRows) — filters to FULLY-closed
+//     symbols only (not in portfolio.holdings), sorts by realisedSGD
+//     descending, attaches dividends. Used by renderRealised()'s closed-
+//     positions table and the Exposure tab's "by exchange" card.
+//
+// Both build on the same aggregation core so this FIFO/realised-P&L-
+// sensitive math has exactly one implementation, not two that could
+// drift if one is fixed later and the other isn't. Extracted 2026-06-26.
+function buildSellSummaryByTicker(sellRows) {
   const summaryByTicker = {};
   sellRows.forEach(r => {
     if (!summaryByTicker[r.sym]) {
@@ -6585,11 +7062,486 @@ function renderRealised() {
     s.proceedsNat_atBuyFx += r.proceedsNative * r.fxOnBuyBlended;
     if (r.sellDate > s.lastSell) s.lastSell = r.sellDate;
   });
+  return summaryByTicker;
+}
+
+function getClosedPositionsSummary(sellRows) {
+  const summaryByTicker = buildSellSummaryByTicker(sellRows);
 
   // Only include fully-closed tickers (not in open holdings)
   const closedSummary = Object.values(summaryByTicker)
     .filter(s => !portfolio.holdings[s.sym])
     .sort((a, b) => b.realisedSGD - a.realisedSGD);
+
+  // Attach dividends per ticker
+  closedSummary.forEach(s => {
+    const split   = computeDividendsSplit(s.sym);
+    s.divSGD      = split.realised || 0;
+    s.divNat      = split.realisedNat || 0;  // local-currency amount at historical ex-date rates
+    s.totalReturn = s.realisedSGD + s.divSGD;
+  });
+
+  return closedSummary;
+}
+
+// ── Exposure tab: "Portfolio summary" (grouped by exchange / type / currency) ──
+// Combines OPEN holdings (portfolio.holdings) and FULLY-CLOSED positions
+// (getClosedPositionsSummary, same trusted FIFO/realised-P&L calculation
+// that powers the Realised tab) into one view, grouped by a user-selectable
+// dimension (exchange / type / currency) via the #exposure-group-by dropdown.
+// Formerly hardcoded to exchange-only ("renderExchangeSummary") — generalised
+// 2026-06-28 so the same card/table can fold in what used to be three
+// separate concepts (by-exchange summary, plus the by-type and by-currency
+// donut charts) into one switchable view. Extended 2026-06-28 (same day) to
+// aggregate per-ticker first, then bucket into groups — this lets each group
+// row expand into its constituent tickers, and lets Return % / XIRR be
+// computed once per ticker and reused at both the ticker and group level.
+//
+// Tag-filter exemption from the original implementation no longer applies —
+// the Exposure tab's tag-filter card was removed entirely 2026-06-28 (tags
+// are still usable from the Holdings tab; this tab just no longer filters by
+// them). This card has always shown ALL holdings + closed positions
+// unconditionally, so removing that filter changes nothing about this
+// function's behaviour.
+
+// Builds dated cash flows for a SINGLE symbol — every buy/sell transaction,
+// every dividend (scaled by shares held just before each ex-date, same
+// rule as buildPortfolioXirrCFs), and a terminal flow equal to the symbol's
+// current value if still held (0 if fully closed). Works identically for
+// open and fully-closed symbols since it derives everything from sym/exch/
+// ccy directly rather than reading portfolio.holdings.
+function buildSymbolXirrCFs(sym, exch, ccy) {
+  const flows = [];
+  portfolio.transactions
+    .filter(t => !t.isFee && t.sym === sym)
+    .forEach(t => {
+      const d = t.date instanceof Date ? t.date : new Date(t.date);
+      const grossNative = Math.abs(t.shares) * t.price;
+      const cfNative = t.shares > 0 ? -(grossNative + t.fees) : (grossNative - t.fees);
+      flows.push({ date: d, amount: toSGD(cfNative, ccy, d) });
+    });
+
+  const ticker = getYahooTicker(sym, exch);
+  const cached = ticker ? divCache[ticker] : null;
+  if (cached?.dividends?.length) {
+    cached.dividends.forEach(({ date, amount }) => {
+      const exStr = date.toISOString().slice(0,10);
+      const dps   = divOverrideDps(divOverrideKey(sym, exStr)) ?? amount;
+      let shares = 0;
+      portfolio.transactions
+        .filter(t => !t.isFee && t.sym === sym)
+        .forEach(t => {
+          const tStr = (t.date instanceof Date ? t.date : new Date(t.date)).toISOString().slice(0,10);
+          if (tStr < exStr) shares += t.shares;
+        });
+      shares = Math.max(0, shares);
+      if (shares >= 1) flows.push({ date, amount: toSGD(shares * dps, ccy, date) });
+    });
+  }
+
+  const hld = portfolio.holdings[sym];
+  flows.push({ date: new Date(), amount: hld ? hld.valueSGD : 0 });
+
+  flows.sort((a, b) => a.date - b.date);
+  return flows;
+}
+
+// ── Shared cell-formatting helpers ──────────────────────────────────────
+// Used by renderGroupedSummary (group/ticker drill-down rows) and
+// renderTickerCompare (the ticker comparison card) — hoisted to module
+// scope 2026-06-28 so both can share one definition rather than drifting
+// apart with two copies of the same formatting rules.
+function moneyCell(amt, bold) {
+  const cls = amt >= 0 ? 'up' : 'down';
+  const sign = amt >= 0 ? '+' : '-';
+  return `<td style="text-align:right${bold ? ';font-weight:600' : ''}" class="${cls}">${sign}S$${fmt(Math.abs(amt))}</td>`;
+}
+function plainMoneyCell(amt) {
+  return `<td style="text-align:right">S$${fmt(amt)}</td>`;
+}
+function pctCell(pct, bold) {
+  if (pct === null || !isFinite(pct)) return `<td style="text-align:right;color:var(--text-secondary)${bold ? ';font-weight:600' : ''}">—</td>`;
+  const cls = pct >= 0 ? 'up' : 'down';
+  return `<td style="text-align:right${bold ? ';font-weight:600' : ''}" class="${cls}">${pct>=0?'+':''}${pct.toFixed(1)}%</td>`;
+}
+function xirrCell(xirr, bold) {
+  if (xirr === null || xirr === undefined || !isFinite(xirr)) return `<td style="text-align:right;color:var(--text-secondary)${bold ? ';font-weight:600' : ''}">—</td>`;
+  const cls = xirr >= 0 ? 'up' : 'down';
+  return `<td style="text-align:right${bold ? ';font-weight:600' : ''}" class="${cls}">${xirr>=0?'+':''}${(xirr*100).toFixed(1)}%</td>`;
+}
+function returnPctOf(totalReturn, costSGD) {
+  return costSGD > 0 ? totalReturn / costSGD * 100 : null;
+}
+function divCell(divSGD, hasDivData) {
+  if (!hasDivData) return '<td style="text-align:right;color:var(--text-secondary);font-size:11px">fetch prices</td>';
+  return divSGD > 0 ? `<td style="text-align:right;color:var(--green)">+S$${fmt(divSGD)}</td>` : '<td style="text-align:right;color:var(--text-secondary)">—</td>';
+}
+
+function renderGroupedSummary() {
+  const tbody = document.getElementById('grouped-summary-body');
+  if (!tbody) return;
+
+  const groupBy = document.getElementById('exposure-group-by')?.value || 'exch';
+  const colHdr  = { exch: 'Exchange', type: 'Type', ccy: 'Currency' }[groupBy];
+  const subTxt  = { exch: 'grouped by exchange', type: 'grouped by type', ccy: 'grouped by currency' }[groupBy];
+  const hdrEl = document.getElementById('grouped-summary-col-hdr');
+  if (hdrEl) hdrEl.textContent = colHdr;
+  const subEl = document.getElementById('grouped-summary-sub');
+  if (subEl) subEl.textContent = `current and closed positions, ${subTxt}`;
+
+  // Row label: type values ('stock'/'etf'/'reit'/'bond') are lowercase
+  // internally and need title-casing for display, same convention used by
+  // the asset-allocation donut and Holdings-tab type pills elsewhere in the
+  // app. Exchange/currency codes (SGX, SGD, ...) are already display-ready.
+  const labelFor = (key) => groupBy === 'type' ? (key.charAt(0).toUpperCase() + key.slice(1)) : key;
+
+  const { sellRows } = computeRealisedPnL();
+  const closedSummary = getClosedPositionsSummary(sellRows);
+
+  // Same detection the currency summary card uses — distinguishes "prices/
+  // dividends not fetched yet" from "genuinely zero dividends for this
+  // group", so the column doesn't show a flat dash before the user has
+  // ever fetched data.
+  const hasDivData = Object.values(portfolio.holdings).some(h => {
+    const ticker = getYahooTicker(h.sym, h.exch);
+    return ticker && divCache[ticker]?.dividends?.length > 0;
+  });
+
+  // ── Per-ticker aggregation (every distinct symbol ever transacted) ──
+  // Built once here, then bucketed into groups below. This is what makes
+  // the expandable per-ticker drill-down possible: each group row's detail
+  // panel just re-displays the subset of these ticker records belonging
+  // to that group, with no recomputation.
+  const byTicker = {};
+  function ensureTicker(sym, exch, ccy, type) {
+    if (!byTicker[sym]) byTicker[sym] = {
+      sym, exch, ccy, type,
+      openCount: 0, closedCount: 0,
+      currentValueSGD: 0, currentPnlSGD: 0, costSGD: 0,
+      realisedSGD: 0, divSGD: 0
+    };
+    return byTicker[sym];
+  }
+
+  Object.values(portfolio.holdings).forEach(h => {
+    const r = ensureTicker(h.sym, h.exch, h.ccy, h.type);
+    r.openCount++;
+    r.currentValueSGD += h.valueSGD;
+    r.currentPnlSGD   += h.pnl;
+    r.costSGD         += h.costSGDVal || 0;
+  });
+
+  closedSummary.forEach(s => {
+    const r = ensureTicker(s.sym, s.exch, s.ccy, s.type || guessType(s.sym, s.exch));
+    r.closedCount++;
+    r.costSGD += s.costSGD || 0;
+  });
+
+  // Realised P&L per ticker: sum EVERY sell row, not just fully-closed
+  // symbols (a partial sell of a still-held symbol must still count here —
+  // see historical note on this fix below). closedSummary's costSGD above
+  // already covers fully-closed tickers' cost basis; partial-sell tickers'
+  // sold-share cost basis is also needed for Return % to be meaningful, so
+  // pull each sell row's costBasisSGD too.
+  //
+  // Fixed 2026-06-26 (when this card was still exchange-only) — the
+  // original version only summed getClosedPositionsSummary() results,
+  // which deliberately excludes partial sells of symbols still currently
+  // held. That silently dropped the realised gain from any partial sell
+  // (24 such symbols in the user's real portfolio: T82U, C6L, CC3, S63,
+  // G3B, C38U, ADYEN.AS, UD1U, ES3, HST, MZH, AV, STAN, BN4, K71U, and
+  // others), causing this card's Realised P&L total to disagree with the
+  // Realised tab's "Realised capital gain" KPI (sellRows.reduce(...),
+  // which correctly includes partials). Same guard still applies now that
+  // aggregation happens per-ticker rather than per-group directly.
+  sellRows.forEach(r => {
+    const t = ensureTicker(r.sym, r.exch, r.ccy, guessType(r.sym, r.exch));
+    t.realisedSGD += r.realisedSGD;
+    // Only add sold-share cost basis for tickers NOT already counted via
+    // closedSummary (closedSummary already includes it) — partial sells of
+    // a symbol still in portfolio.holdings aren't in closedSummary at all,
+    // so their sold-share cost basis would otherwise be missing entirely.
+    if (portfolio.holdings[r.sym]) t.costSGD += r.costBasisSGD || 0;
+  });
+
+  // Dividends: sum unrealised + realised for EVERY distinct symbol the
+  // user has ever transacted, not just open holdings + fully-closed
+  // positions. Fixed 2026-06-26 — same root cause as the realised P&L fix
+  // above: a partially-sold-but-still-held symbol's REALISED dividend
+  // portion (paid on the shares that were sold) was being dropped
+  // entirely. This mirrors how the Dividends tab's own "Total received
+  // (all time)" KPI is built (historyRows, a unified open+closed symbol
+  // list with no unrealised/realised split at all).
+  portfolio.transactions.filter(t => !t.isFee).forEach(t => {
+    if (!byTicker[t.sym]) ensureTicker(t.sym, t.exch, t.ccy, guessType(t.sym, t.exch));
+  });
+  Object.values(byTicker).forEach(t => {
+    const split = computeDividendsSplit(t.sym);
+    t.divSGD = (split.unrealised || 0) + (split.realised || 0);
+  });
+
+  // ── XIRR per ticker (only computed once data exists to make it meaningful) ──
+  Object.values(byTicker).forEach(t => {
+    const flows = buildSymbolXirrCFs(t.sym, t.exch, t.ccy);
+    t.xirr = computeXIRR(flows);
+  });
+
+  // ── Bucket tickers into groups ───────────────────────────────────────
+  const groupKeyOf = (t) => groupBy === 'type' ? t.type : t[groupBy];
+  const byGroup = {};
+  function ensureGroup(key) {
+    if (!byGroup[key]) byGroup[key] = { key, tickers: [] };
+    return byGroup[key];
+  }
+  Object.values(byTicker).forEach(t => ensureGroup(groupKeyOf(t)).tickers.push(t));
+
+  const groups = Object.values(byGroup).map(g => {
+    const agg = g.tickers.reduce((a, t) => {
+      a.openCount += t.openCount; a.closedCount += t.closedCount;
+      a.currentValueSGD += t.currentValueSGD; a.currentPnlSGD += t.currentPnlSGD;
+      a.costSGD += t.costSGD; a.realisedSGD += t.realisedSGD; a.divSGD += t.divSGD;
+      return a;
+    }, { openCount:0, closedCount:0, currentValueSGD:0, currentPnlSGD:0, costSGD:0, realisedSGD:0, divSGD:0 });
+    // Group XIRR: solve once over the MERGED cash-flow stream of every
+    // member ticker — not an average of per-ticker XIRRs, which would
+    // misrepresent a blend of differently-sized, differently-timed
+    // positions. Re-derives flows rather than reusing buildSymbolXirrCFs
+    // per ticker again, to keep this as one clean merged + sorted series.
+    const mergedFlows = g.tickers
+      .flatMap(t => buildSymbolXirrCFs(t.sym, t.exch, t.ccy))
+      .sort((a, b) => a.date - b.date);
+    agg.xirr = computeXIRR(mergedFlows);
+    agg.key = g.key;
+    agg.tickers = g.tickers.sort((a, b) => (b.currentValueSGD + Math.abs(b.realisedSGD)) - (a.currentValueSGD + Math.abs(a.realisedSGD)));
+    return agg;
+  }).sort((a, b) => (b.currentValueSGD + b.realisedSGD) - (a.currentValueSGD + a.realisedSGD));
+
+  if (!groups.length) {
+    tbody.innerHTML = '<tr><td colspan="10" style="text-align:center;color:var(--text-secondary);padding:20px">No data yet.</td></tr>';
+    return;
+  }
+
+  const totals = groups.reduce((t, r) => {
+    t.openCount += r.openCount; t.closedCount += r.closedCount;
+    t.currentValueSGD += r.currentValueSGD; t.currentPnlSGD += r.currentPnlSGD;
+    t.costSGD += r.costSGD; t.realisedSGD += r.realisedSGD; t.divSGD += r.divSGD;
+    return t;
+  }, { openCount:0, closedCount:0, currentValueSGD:0, currentPnlSGD:0, costSGD:0, realisedSGD:0, divSGD:0 });
+  const totalsMergedFlows = Object.values(byTicker)
+    .flatMap(t => buildSymbolXirrCFs(t.sym, t.exch, t.ccy))
+    .sort((a, b) => a.date - b.date);
+  totals.xirr = computeXIRR(totalsMergedFlows);
+
+  tbody.innerHTML = groups.map((g, gi) => {
+    const totalReturn = g.currentPnlSGD + g.realisedSGD + g.divSGD;
+    const retPct = returnPctOf(totalReturn, g.costSGD);
+    const groupId = `grp-summary-detail-${gi}`;
+
+    const tickerRows = g.tickers.map(t => {
+      const tTotalReturn = t.currentPnlSGD + t.realisedSGD + t.divSGD;
+      const tRetPct = returnPctOf(tTotalReturn, t.costSGD);
+      const checked = compareTickers.has(t.sym) ? 'checked' : '';
+      return `<tr>
+        <td style="padding-left:28px">
+          <input type="checkbox" ${checked} onclick="event.stopPropagation()" onchange="toggleTickerCompare('${t.sym}', this.checked)" style="margin-right:6px;vertical-align:middle;cursor:pointer" title="Add to comparison">
+          ${symWithName(t.sym)} <span style="font-size:11px;color:var(--text-secondary)">${t.exch}</span>
+        </td>
+        <td style="text-align:right">${t.openCount}</td>
+        <td style="text-align:right">${t.closedCount}</td>
+        ${plainMoneyCell(t.currentValueSGD)}
+        ${moneyCell(t.currentPnlSGD)}
+        ${moneyCell(t.realisedSGD)}
+        ${divCell(t.divSGD, hasDivData)}
+        ${moneyCell(tTotalReturn)}
+        ${pctCell(tRetPct)}
+        ${xirrCell(t.xirr)}
+      </tr>`;
+    }).join('');
+
+    return `<tr style="cursor:pointer" onclick="toggleRlDetail('${groupId}')">
+      <td><i class="ti ti-chevron-right" id="${groupId}-icon" style="font-size:10px;margin-right:4px;transition:transform 0.15s"></i><strong>${labelFor(g.key)}</strong> <span style="font-size:11px;color:var(--text-secondary)">(${g.tickers.length})</span></td>
+      <td style="text-align:right">${g.openCount}</td>
+      <td style="text-align:right">${g.closedCount}</td>
+      ${plainMoneyCell(g.currentValueSGD)}
+      ${moneyCell(g.currentPnlSGD)}
+      ${moneyCell(g.realisedSGD)}
+      ${divCell(g.divSGD, hasDivData)}
+      ${moneyCell(totalReturn, true)}
+      ${pctCell(retPct, true)}
+      ${xirrCell(g.xirr, true)}
+    </tr>
+    <tr id="${groupId}" style="display:none">
+      <td colspan="10" style="padding:0">
+        <table style="width:100%;border-collapse:collapse;font-size:12px">
+          <tbody>${tickerRows}</tbody>
+        </table>
+      </td>
+    </tr>`;
+  }).join('');
+
+  const totTotalReturn = totals.currentPnlSGD + totals.realisedSGD + totals.divSGD;
+  const totRetPct = returnPctOf(totTotalReturn, totals.costSGD);
+  tbody.innerHTML += `<tr style="border-top:1.5px solid var(--border-med)">
+    <td style="font-weight:600">Total</td>
+    <td style="text-align:right;font-weight:600">${totals.openCount}</td>
+    <td style="text-align:right;font-weight:600">${totals.closedCount}</td>
+    <td style="text-align:right;font-weight:600">S$${fmt(totals.currentValueSGD)}</td>
+    ${moneyCell(totals.currentPnlSGD, true)}
+    ${moneyCell(totals.realisedSGD, true)}
+    <td style="text-align:right;font-weight:600;${hasDivData ? 'color:var(--green)' : 'color:var(--text-secondary);font-size:11px'}">${!hasDivData ? 'fetch prices' : totals.divSGD > 0 ? '+S$' + fmt(totals.divSGD) : '—'}</td>
+    ${moneyCell(totTotalReturn, true)}
+    ${pctCell(totRetPct, true)}
+    ${xirrCell(totals.xirr, true)}
+  </tr>`;
+
+  // Cache for renderTickerCompare — same per-ticker data regardless of
+  // groupBy (groupBy only changes how tickers are BUCKETED, not the
+  // underlying ticker-level figures), so this is always correct to reuse
+  // without recomputing the XIRR solve a second time per checkbox click.
+  portfolio._tickerSummary = byTicker;
+  portfolio._tickerSummaryHasDivData = hasDivData;
+  renderTickerCompare();
+}
+
+// ── Ticker comparison card ───────────────────────────────────────────
+// Side-by-side comparison of any 2+ tickers the person checks off in the
+// grouped-summary drill-down above. Deliberately makes no causal claim
+// about switching FROM one ticker INTO another — it's a plain juxtaposition
+// of each ticker's own figures (same metric set as the drill-down row:
+// Current value/P&L, Realised P&L, Dividends, Total return, Return %,
+// XIRR), letting the person eyeball which of their picks has actually
+// performed better. Session-only selection (not persisted) — same
+// rationale as the now-removed Exposure tab tag filter: this is a
+// transient "let me check something" tool, not a durable setting.
+let compareTickers = new Set();
+
+function toggleTickerCompare(sym, isChecked) {
+  if (isChecked) compareTickers.add(sym);
+  else compareTickers.delete(sym);
+  renderTickerCompare();
+}
+
+function removeTickerCompare(sym) {
+  compareTickers.delete(sym);
+  // Also uncheck the corresponding drill-down checkbox if its row happens
+  // to be currently expanded/visible, so the two controls never disagree.
+  document.querySelectorAll(`input[type=checkbox][onchange*="toggleTickerCompare('${sym}'"]`)
+    .forEach(cb => { cb.checked = false; });
+  renderTickerCompare();
+}
+
+function clearTickerCompare() {
+  compareTickers.clear();
+  document.querySelectorAll('#grouped-summary-card input[type=checkbox]')
+    .forEach(cb => { cb.checked = false; });
+  renderTickerCompare();
+}
+
+function renderTickerCompare() {
+  const card = document.getElementById('ticker-compare-card');
+  const tbody = document.getElementById('ticker-compare-body');
+  if (!card || !tbody) return;
+
+  if (compareTickers.size === 0) { card.style.display = 'none'; return; }
+  card.style.display = '';
+
+  const byTicker = portfolio._tickerSummary || {};
+  const hasDivData = portfolio._tickerSummaryHasDivData || false;
+
+  const rows = [...compareTickers]
+    .map(sym => byTicker[sym])
+    .filter(Boolean) // a symbol could be removed from the portfolio entirely between renders
+    .sort((a, b) => (b.currentValueSGD + Math.abs(b.realisedSGD)) - (a.currentValueSGD + Math.abs(a.realisedSGD)));
+
+  if (!rows.length) { card.style.display = 'none'; return; }
+
+  tbody.innerHTML = rows.map(t => {
+    const totalReturn = t.currentPnlSGD + t.realisedSGD + t.divSGD;
+    const retPct = returnPctOf(totalReturn, t.costSGD);
+    return `<tr>
+      <td>
+        <i class="ti ti-x" onclick="removeTickerCompare('${t.sym}')" style="font-size:11px;margin-right:6px;cursor:pointer;color:var(--text-secondary)" title="Remove from comparison"></i>
+        ${symWithName(t.sym)} <span style="font-size:11px;color:var(--text-secondary)">${t.exch}</span>
+      </td>
+      ${plainMoneyCell(t.currentValueSGD)}
+      ${moneyCell(t.currentPnlSGD)}
+      ${moneyCell(t.realisedSGD)}
+      ${divCell(t.divSGD, hasDivData)}
+      ${moneyCell(totalReturn, true)}
+      ${pctCell(retPct, true)}
+      ${xirrCell(t.xirr, true)}
+    </tr>`;
+  }).join('');
+
+  // Only show a totals row once there's more than one ticker selected —
+  // a single row's "total" would just repeat that same row, which adds
+  // nothing and could read as a second, redundant figure for one ticker.
+  if (rows.length < 2) return;
+
+  const totals = rows.reduce((t, r) => {
+    t.currentValueSGD += r.currentValueSGD; t.currentPnlSGD += r.currentPnlSGD;
+    t.costSGD += r.costSGD; t.realisedSGD += r.realisedSGD; t.divSGD += r.divSGD;
+    return t;
+  }, { currentValueSGD:0, currentPnlSGD:0, costSGD:0, realisedSGD:0, divSGD:0 });
+  // Combined XIRR over the merged cash-flow stream of just the SELECTED
+  // tickers — not an average of their individual XIRRs, same rationale as
+  // the group-level XIRR in renderGroupedSummary (a blend of differently
+  // sized/timed positions isn't well-represented by averaging rates).
+  const mergedFlows = rows
+    .flatMap(t => buildSymbolXirrCFs(t.sym, t.exch, t.ccy))
+    .sort((a, b) => a.date - b.date);
+  totals.xirr = computeXIRR(mergedFlows);
+  const totTotalReturn = totals.currentPnlSGD + totals.realisedSGD + totals.divSGD;
+  const totRetPct = returnPctOf(totTotalReturn, totals.costSGD);
+
+  tbody.innerHTML += `<tr style="border-top:1.5px solid var(--border-med)">
+    <td style="font-weight:600">Total (${rows.length} selected)</td>
+    <td style="text-align:right;font-weight:600">S$${fmt(totals.currentValueSGD)}</td>
+    ${moneyCell(totals.currentPnlSGD, true)}
+    ${moneyCell(totals.realisedSGD, true)}
+    <td style="text-align:right;font-weight:600;${hasDivData ? 'color:var(--green)' : 'color:var(--text-secondary);font-size:11px'}">${!hasDivData ? 'fetch prices' : totals.divSGD > 0 ? '+S$' + fmt(totals.divSGD) : '—'}</td>
+    ${moneyCell(totTotalReturn, true)}
+    ${pctCell(totRetPct, true)}
+    ${xirrCell(totals.xirr, true)}
+  </tr>`;
+}
+
+function renderRealised() {
+  const { sellRows, open } = computeRealisedPnL();
+  // Newest sell first
+  const sortedSells = [...sellRows].sort((a,b) => b.sellDate - a.sellDate);
+  const openList    = Object.values(open).sort((a,b) => b.totalReturnSGD - a.totalReturnSGD);
+
+  // ── KPIs ──────────────────────────────────────────────────────────
+  const totalRealised = sellRows.reduce((s,r) => s + r.realisedSGD, 0);
+  // Realised dividends: sum computeDividendsSplit.realised for each unique sold symbol
+  const soldSyms = [...new Set(sellRows.map(r => r.sym))];
+  const totalDivAll = soldSyms.reduce((s, sym) => {
+    return s + (computeDividendsSplit(sym).realised || 0);
+  }, 0);
+  const totalRealisedReturn = totalRealised + totalDivAll;
+
+  document.getElementById('rl-realised').textContent  = (totalRealised>=0?'+':'') + 'S$' + fmt(Math.abs(totalRealised));
+  document.getElementById('rl-realised').className    = 'metric-value ' + (totalRealised>=0?'up':'down');
+  document.getElementById('rl-dividends').textContent = 'S$' + fmt(totalDivAll);
+  document.getElementById('rl-total').textContent     = (totalRealisedReturn>=0?'+':'') + 'S$' + fmt(Math.abs(totalRealisedReturn));
+  document.getElementById('rl-total').className       = 'metric-value ' + (totalRealisedReturn>=0?'up':'down');
+
+  const countEl = document.getElementById('rl-sell-count');
+  if (countEl) countEl.textContent = `${sortedSells.length} sell transaction${sortedSells.length!==1?'s':''}`;
+
+  // ── Closed positions summary table ────────────────────────────────────
+  // Aggregation logic lives in getClosedPositionsSummary() (shared with the
+  // Exposure tab's "by exchange" card) so this FIFO/realised-P&L-sensitive
+  // calculation has exactly one implementation, not two that could drift.
+  const closedSummary = getClosedPositionsSummary(sellRows);
+  // Symbol/name search filter — applied only to what's displayed; the card's
+  // show/hide and "N closed positions" footer semantics stay tied to the
+  // unfiltered set below (closedSummary), matching how Holdings handles search.
+  const rlSummaryQ = (document.getElementById('rl-summary-search')?.value || '').toLowerCase().trim();
+  const closedSummaryView = rlSummaryQ
+    ? closedSummary.filter(s => s.sym.toLowerCase().includes(rlSummaryQ) || symName(s.sym).toLowerCase().includes(rlSummaryQ))
+    : closedSummary;
 
   const summaryCard = document.getElementById('rl-summary-card');
   const summaryBody = document.getElementById('rl-summary-body');
@@ -6598,18 +7550,17 @@ function renderRealised() {
   if (summaryCard) summaryCard.style.display = closedSummary.length ? '' : 'none';
 
   if (closedSummary.length && summaryBody) {
-    // Attach dividends per ticker
-    closedSummary.forEach(s => {
-      const split   = computeDividendsSplit(s.sym);
-      s.divSGD      = split.realised || 0;
-      s.divNat      = split.realisedNat || 0;  // local-currency amount at historical ex-date rates
-      s.totalReturn = s.realisedSGD + s.divSGD;
-    });
+    if (!closedSummaryView.length) {
+      summaryBody.innerHTML = '<tr><td colspan="11" style="text-align:center;padding:24px;color:var(--text-secondary)">No closed positions match your search.</td></tr>';
+      if (summaryFoot) summaryFoot.innerHTML = '';
+    } else {
+    // closedSummaryView already has divSGD/divNat/totalReturn attached by
+    // getClosedPositionsSummary() and is sorted by realisedSGD descending;
+    // re-sort here by totalReturn descending for this specific table's
+    // display order (the exchange card sorts differently — see below).
+    closedSummaryView.sort((a, b) => b.totalReturn - a.totalReturn);
 
-    // Re-sort: total return descending
-    closedSummary.sort((a, b) => b.totalReturn - a.totalReturn);
-
-    summaryBody.innerHTML = closedSummary.map((s, idx) => {
+    summaryBody.innerHTML = closedSummaryView.map((s, idx) => {
       const gainCls  = s.realisedSGD >= 0 ? 'up' : 'down';
       const totCls   = s.totalReturn  >= 0 ? 'up' : 'down';
       const gainPct  = s.costSGD > 0 ? s.realisedSGD / s.costSGD * 100 : 0;
@@ -6736,19 +7687,21 @@ function renderRealised() {
         </tr>`;
     }).join('');
 
-    // Footer totals
+    // Footer totals — reflect the filtered view, so totals match what's
+    // actually visible (e.g. searching "D05" shows D05's own totals, not
+    // the whole portfolio's)
     if (summaryFoot) {
-      const totCost  = closedSummary.reduce((a,s) => a + s.costSGD,     0);
-      const totProc  = closedSummary.reduce((a,s) => a + s.proceedsSGD, 0);
-      const totGain  = closedSummary.reduce((a,s) => a + s.realisedSGD, 0);
-      const totDiv   = closedSummary.reduce((a,s) => a + s.divSGD,      0);
-      const totRet   = closedSummary.reduce((a,s) => a + s.totalReturn,  0);
+      const totCost  = closedSummaryView.reduce((a,s) => a + s.costSGD,     0);
+      const totProc  = closedSummaryView.reduce((a,s) => a + s.proceedsSGD, 0);
+      const totGain  = closedSummaryView.reduce((a,s) => a + s.realisedSGD, 0);
+      const totDiv   = closedSummaryView.reduce((a,s) => a + s.divSGD,      0);
+      const totRet   = closedSummaryView.reduce((a,s) => a + s.totalReturn,  0);
       const totGainPct = totCost > 0 ? totGain / totCost * 100 : 0;
       const totRetPct  = totCost > 0 ? totRet  / totCost * 100 : 0;
       const gCls = totGain >= 0 ? 'up' : 'down';
       const rCls = totRet  >= 0 ? 'up' : 'down';
       summaryFoot.innerHTML = `<tr>
-        <td colspan="2" style="font-weight:600">${closedSummary.length} closed position${closedSummary.length!==1?'s':''}</td>
+        <td colspan="2" style="font-weight:600">${closedSummaryView.length} closed position${closedSummaryView.length!==1?'s':''}${rlSummaryQ ? ` <span style="font-weight:400;color:var(--text-secondary)">of ${closedSummary.length}</span>` : ''}</td>
         <td style="text-align:right;font-weight:600">S$${fmt(totCost)}</td>
         <td style="text-align:right;color:var(--text-secondary);font-weight:600">—</td>
         <td style="text-align:right;font-weight:600">S$${fmt(totProc)}</td>
@@ -6760,20 +7713,35 @@ function renderRealised() {
         <td style="text-align:right;font-weight:600" class="${rCls}">${totRetPct>=0?'+':''}${totRetPct.toFixed(1)}%</td>
       </tr>`;
     }
+    } // end else (closedSummaryView.length)
   }
 
   // ── Realised currency summary card ───────────────────────────────────
-  // Uses summaryByTicker (ALL sell transactions, incl. partial sells of still-open
-  // positions) so the totals match the KPI cards exactly.
-  renderRealisedCcySummary(summaryByTicker, soldSyms);
+  // Uses the raw (unfiltered) sell summary — ALL sell transactions, incl.
+  // partial sells of still-open positions — so the totals match the KPI
+  // cards exactly. Rebuilt here via the shared builder rather than reusing
+  // closedSummary, which is deliberately filtered to fully-closed only.
+  renderRealisedCcySummary(buildSellSummaryByTicker(sellRows), soldSyms);
 
   // ── Sell history table ────────────────────────────────────────────
+  const rlSellQ = (document.getElementById('rl-sell-search')?.value || '').toLowerCase().trim();
+  const sortedSellsView = rlSellQ
+    ? sortedSells.filter(r => r.sym.toLowerCase().includes(rlSellQ) || symName(r.sym).toLowerCase().includes(rlSellQ))
+    : sortedSells;
+
   if (!sortedSells.length) {
     document.getElementById('rl-closed-body').innerHTML =
       '<tr><td colspan="10" style="text-align:center;padding:24px;color:var(--text-secondary)">No sell transactions found.</td></tr>';
+    const footEl0 = document.getElementById('rl-closed-foot');
+    if (footEl0) footEl0.innerHTML = '';
+  } else if (!sortedSellsView.length) {
+    document.getElementById('rl-closed-body').innerHTML =
+      '<tr><td colspan="10" style="text-align:center;padding:24px;color:var(--text-secondary)">No sell transactions match your search.</td></tr>';
+    const footEl0 = document.getElementById('rl-closed-foot');
+    if (footEl0) footEl0.innerHTML = '';
   } else {
     const rows = [];
-    sortedSells.forEach((r, idx) => {
+    sortedSellsView.forEach((r, idx) => {
       const gainCls      = r.realisedSGD >= 0 ? 'up' : 'down';
       const sellStr      = r.sellDate.toISOString().slice(0,10);
       const heldStr      = r.avgHeldDays >= 365
@@ -6832,15 +7800,15 @@ function renderRealised() {
     document.getElementById('rl-closed-body').innerHTML = rows.join('');
 
     // ── Summary footer row — no per-share prices or share count ──────
-    const totCost     = sortedSells.reduce((s,r) => s + r.costBasisSGD, 0);
-    const totProceeds = sortedSells.reduce((s,r) => s + r.proceedsSGD,  0);
-    const totGain     = sortedSells.reduce((s,r) => s + r.realisedSGD,  0);
+    const totCost     = sortedSellsView.reduce((s,r) => s + r.costBasisSGD, 0);
+    const totProceeds = sortedSellsView.reduce((s,r) => s + r.proceedsSGD,  0);
+    const totGain     = sortedSellsView.reduce((s,r) => s + r.realisedSGD,  0);
     const totGainPct  = totCost > 0 ? (totGain / totCost * 100) : 0;
     const gainCls     = totGain >= 0 ? 'up' : 'down';
     const footEl      = document.getElementById('rl-closed-foot');
     if (footEl) {
       footEl.innerHTML = `<tr>
-        <td colspan="5" style="font-weight:600">Total (${sortedSells.length} sell${sortedSells.length!==1?'s':''})</td>
+        <td colspan="5" style="font-weight:600">Total (${sortedSellsView.length} sell${sortedSellsView.length!==1?'s':''})${rlSellQ ? ` <span style="font-weight:400;color:var(--text-secondary)">of ${sortedSells.length}</span>` : ''}</td>
         <td style="text-align:right;font-weight:600">S$${fmt(totCost)}</td>
         <td style="text-align:right;font-weight:600">S$${fmt(totProceeds)}</td>
         <td style="text-align:right;font-weight:600" class="${gainCls}">${totGain>=0?'+':''}S$${fmt(Math.abs(totGain))}</td>
@@ -8382,9 +9350,10 @@ function renderRisk() {
 
 // ─── EXPOSURE ─────────────────────────────────────────────────────────
 function renderExposure() {
+  renderGroupedSummary();
   const h = portfolio.holdings;
   if (!Object.keys(h).length) {
-    // All positions closed — show empty state on each chart canvas and detail sections
+    // All positions closed — nothing currently held to chart.
     ['typeChart','exchChart','currChart','concChart'].forEach(id => {
       destroyChart(id);
       const el = document.getElementById(id);
@@ -8393,9 +9362,8 @@ function renderExposure() {
         ctx.clearRect(0, 0, el.width, el.height);
       }
     });
-    const msg = '<div style="font-size:13px;color:var(--text-secondary);padding:16px 0">No open positions — all holdings have been closed.</div>';
     const cdEl = document.getElementById('currency-detail');
-    if (cdEl) cdEl.innerHTML = msg;
+    if (cdEl) cdEl.innerHTML = '<div style="font-size:13px;color:var(--text-secondary);padding:16px 0">No open positions — all holdings have been closed.</div>';
     return;
   }
   const byType={}, byExch={}, byCcy={};
@@ -8423,11 +9391,21 @@ function renderExposure() {
     const src  = fxHistory[ccy]?.size > 0 ? '<span class="price-badge price-live">live</span>' : '<span class="price-badge price-est">fallback</span>';
     return `<div class="currency-row"><span style="font-weight:500">${ccy}</span><span style="color:var(--text-secondary)">FX: ${rate.toFixed(4)} SGD ${src}</span><span>S$${fmt(val)}</span><span style="font-weight:500">${(val/total*100).toFixed(1)}%</span></div>`;
   }).join('');
-  const top10=Object.values(h).sort((a,b)=>b.valueSGD-a.valueSGD).slice(0,10);
+  // Recompute weight LOCALLY within the filtered subset, not the global
+  // portfolio weight — when a tag filter is active, "concentration" should
+  // mean concentration within that slice (e.g. "how concentrated is my
+  // REIT sleeve"), not each holding's share of the whole portfolio, which
+  // wouldn't sum to 100% within the filtered view and would understate
+  // concentration in exactly the case where the user is deliberately
+  // looking at a sub-slice.
+  const filteredTotal = Object.values(h).reduce((sum, x) => sum + x.valueSGD, 0);
+  const top10=Object.values(h)
+    .map(x => ({ ...x, _filteredWeight: filteredTotal > 0 ? x.valueSGD / filteredTotal * 100 : 0 }))
+    .sort((a,b)=>b.valueSGD-a.valueSGD).slice(0,10);
   destroyChart('concChart');
   portfolio.allCharts.concChart=new Chart(document.getElementById('concChart'),{
     type:'bar',
-    data:{labels:top10.map(h=>h.sym), datasets:[{data:top10.map(h=>h.weight), backgroundColor:COLORS, borderRadius:4}]},
+    data:{labels:top10.map(x=>x.sym), datasets:[{data:top10.map(x=>x._filteredWeight), backgroundColor:COLORS, borderRadius:4}]},
     options:{responsive:true, maintainAspectRatio:false, scales:{x:{grid:{display:false},ticks:{font:{size:11},color:'#888'}}, y:{grid:{color:'rgba(128,128,128,0.1)'},ticks:{callback:v=>v.toFixed(0)+'%',font:{size:11},color:'#888'}}}, plugins:{legend:{display:false}}}
   });
 }
@@ -8597,8 +9575,21 @@ async function fetchDividendsSG() {
         const exCell  = dateCells[0] || '';
         const payCell = dateCells[1] || '';
 
-        // Amount cell: "CCY0.000" or "CCY 0.000" pattern, e.g. "SGD0.81"
-        const amtStr = cellTexts.find(t => amtRe.test(t)) || '';
+        // Amount cell: "CCY0.000" or "CCY 0.000" pattern, e.g. "SGD0.81".
+        // dividends.sg's table also has a "Total" column (the already-summed
+        // annual/ex-date total, e.g. "SGD 0.29") on the FIRST row of a
+        // multi-line group, and it matches this same regex shape. Total
+        // always appears BEFORE Amount in column order, so taking the
+        // first match (previous behaviour) picked up the Total instead of
+        // the per-line Amount on first rows — then continuation rows added
+        // their own Amount on top, double-counting the special dividend
+        // (confirmed live on C6L ex 2026-08-11: Total "SGD 0.29" + special
+        // Amount "SGD0.07" summed to a reported 0.36 instead of the correct
+        // 0.22+0.07=0.29). Taking the LAST match always lands on Amount,
+        // since continuation rows have no Total cell to conflict with.
+        // Fixed 2026-06-27.
+        const amtCells = cellTexts.filter(t => amtRe.test(t));
+        const amtStr = amtCells.length ? amtCells[amtCells.length - 1] : '';
 
         // Update last known ex-date if this row has a valid one
         if (dateRe.test(exCell)) lastExStr = exCell;
@@ -8701,7 +9692,23 @@ async function fetchDividendsSG() {
 
 // ─── ORCHESTRATOR ─────────────────────────────────────────────────────
 // Called by the Refresh button and after fetchAllPrices completes.
-async function fetchAnnouncedDividends() {
+// Throttle window for the AUTOMATIC post-save/delete call only. Manual
+// Refresh button clicks always bypass this (force=true default) — the
+// whole point of clicking Refresh is to force a real fetch right now.
+// Upcoming dividend announcements on dividends.sg don't change meaningfully
+// within a few minutes, so re-scraping the full page on every single
+// transaction add/edit/delete (previously unconditional, no cache at all)
+// was pure wasted latency on the save/delete path — this was one of the
+// larger remaining contributors to the multi-second delay after a save.
+const ANNOUNCED_DIV_THROTTLE_MS = 5 * 60 * 1000; // 5 minutes
+let lastAnnouncedDivFetchAt = 0;
+
+async function fetchAnnouncedDividends(force = true) {
+  if (!force && (Date.now() - lastAnnouncedDivFetchAt) < ANNOUNCED_DIV_THROTTLE_MS) {
+    return; // skip — recently fetched, nothing meaningful would have changed
+  }
+  lastAnnouncedDivFetchAt = Date.now();
+
   const btn = document.getElementById('btn-fetch-upcoming');
   const sub = document.getElementById('upcoming-div-sub');
   if (btn) { btn.disabled = true; btn.innerHTML = '<i class="ti ti-loader-2" style="font-size:11px"></i> Fetching…'; }
@@ -9030,7 +10037,25 @@ function importManualDeclarations(input) {
   reader.readAsText(file);
 }
 
+// When editing an existing manual declaration, this holds the ORIGINAL
+// ex-date (the key under which it's currently saved) so submitManualEntry
+// can correctly replace that exact record even if the person changes the
+// ex-date in the form. Null = creating a brand new entry, not editing.
+// Without this, saveManualEntry's sym+exDate dedup key would silently
+// create a second, duplicate entry instead of updating the original the
+// moment the ex-date itself was the field being corrected — confirmed live
+// on V7AB 2026-06-27: editing ex-date 2026-05-13 → 2026-05-19 left BOTH
+// rows in manualDivDeclarations, and the stale 2026-05-13/pay 2026-05-27
+// row kept showing in both Upcoming cards alongside the intended edit.
+let _editingManualEntryOriginalExDate = null;
+
 function renderManualEntryPanel() {
+  // A full re-render means the form is being rebuilt from scratch — any
+  // in-progress edit-mode banner is about to disappear visually, so clear
+  // the tracking variable too rather than risk a stale reference (e.g. if
+  // an import or another save ran while a row was mid-edit).
+  _editingManualEntryOriginalExDate = null;
+
   const el = document.getElementById('div-manual-panel');
   if (!el) return;
 
@@ -9077,6 +10102,7 @@ function renderManualEntryPanel() {
       <td style="text-align:right">${e.currency} ${e.dps.toFixed(4)}</td>
       <td style="text-align:right;color:var(--green);font-weight:500">${shares > 0 ? 'S$' + fmt(gross, 2) : '—'}</td>
       <td style="text-align:right">
+        <button onclick="editManualEntry('${e.sym}','${exStr}')" style="background:none;border:none;cursor:pointer;color:var(--text-secondary);font-size:12px;padding:2px 6px" title="Edit"><i class="ti ti-pencil" style="font-size:12px"></i></button>
         <button onclick="deleteManualEntry('${e.sym}','${exStr}')" style="background:none;border:none;cursor:pointer;color:var(--red);font-size:12px;padding:2px 6px" title="Remove">✕</button>
       </td>
     </tr>`;
@@ -9101,6 +10127,10 @@ function renderManualEntryPanel() {
             <i class="ti ti-trash" style="font-size:11px;margin-right:3px"></i>Clear all
           </button>` : ''}
         </div>
+      </div>
+      <div id="mdiv-editing-banner" style="display:none;margin-bottom:8px;padding:6px 10px;background:rgba(83,74,183,0.1);border-radius:6px;font-size:11px;color:var(--purple);align-items:center;justify-content:space-between" >
+        <span id="mdiv-editing-text"></span>
+        <button onclick="cancelEditManualEntry()" class="btn-secondary" style="padding:2px 8px;font-size:10px">Cancel edit</button>
       </div>
       <div style="display:flex;flex-wrap:wrap;gap:8px;align-items:flex-end">
         <div>
@@ -9127,7 +10157,7 @@ function renderManualEntryPanel() {
             ${ccyOptions}
           </select>
         </div>
-        <button onclick="submitManualEntry()" class="btn-primary" style="padding:6px 14px;font-size:12px;height:32px;align-self:flex-end">
+        <button onclick="submitManualEntry()" id="mdiv-save-btn" class="btn-primary" style="padding:6px 14px;font-size:12px;height:32px;align-self:flex-end">
           Save
         </button>
       </div>
@@ -9163,6 +10193,57 @@ function onManualSymChange() {
   Array.from(ccySel.options).forEach(o => { o.selected = (o.value === ccy); });
 }
 
+// Pre-fill the form with an existing declaration's values so changing the
+// ex-date (or anything else) is explicitly an edit-in-place, not a
+// silent duplicate. Remembers the ORIGINAL ex-date in
+// _editingManualEntryOriginalExDate so submitManualEntry can delete that
+// exact record even if the ex-date field itself gets changed.
+function editManualEntry(sym, exDateStr) {
+  const all = getManualDeclarations();
+  const entry = all.find(e => e.sym === sym && e.exDate === exDateStr);
+  if (!entry) { toast('Could not find that declaration', 'warn'); return; }
+
+  _editingManualEntryOriginalExDate = { sym, exDate: exDateStr };
+
+  const symSel = document.getElementById('mdiv-sym');
+  if (symSel) {
+    const hasOption = Array.from(symSel.options).some(o => o.value === sym);
+    if (hasOption) symSel.value = sym;
+  }
+  const exInput  = document.getElementById('mdiv-exdate');
+  const payInput = document.getElementById('mdiv-paydate');
+  const dpsInput = document.getElementById('mdiv-dps');
+  const ccySel   = document.getElementById('mdiv-ccy');
+  if (exInput)  exInput.value  = entry.exDate.slice(0, 10);
+  if (payInput) payInput.value = entry.payDate ? entry.payDate.slice(0, 10) : '';
+  if (dpsInput) dpsInput.value = entry.dps;
+  if (ccySel)   ccySel.value   = entry.currency;
+
+  const banner = document.getElementById('mdiv-editing-banner');
+  const text   = document.getElementById('mdiv-editing-text');
+  const saveBtn = document.getElementById('mdiv-save-btn');
+  if (banner) banner.style.display = 'flex';
+  if (text)   text.textContent = `Editing ${sym} · ex ${exDateStr} — change any field, then Update`;
+  if (saveBtn) saveBtn.textContent = 'Update';
+
+  exInput?.scrollIntoView?.({ behavior: 'smooth', block: 'center' });
+}
+
+function cancelEditManualEntry() {
+  _editingManualEntryOriginalExDate = null;
+  const banner = document.getElementById('mdiv-editing-banner');
+  const saveBtn = document.getElementById('mdiv-save-btn');
+  if (banner) banner.style.display = 'none';
+  if (saveBtn) saveBtn.textContent = 'Save';
+  // Clear the form back to blank-create state
+  const exInput  = document.getElementById('mdiv-exdate');
+  const payInput = document.getElementById('mdiv-paydate');
+  const dpsInput = document.getElementById('mdiv-dps');
+  if (exInput)  exInput.value  = '';
+  if (payInput) payInput.value = '';
+  if (dpsInput) dpsInput.value = '';
+}
+
 // Validate and submit the form
 function submitManualEntry() {
   const sym     = document.getElementById('mdiv-sym')?.value?.trim();
@@ -9189,19 +10270,177 @@ function submitManualEntry() {
   const hld  = portfolio.holdings[sym];
   const exch = hld ? hld.exch : 'LSE';
 
+  // If editing and the ex-date was changed, delete the ORIGINAL record
+  // first — otherwise saveManualEntry's sym+exDate dedup key only matches
+  // the new ex-date and the original stays behind as a duplicate. This was
+  // the actual cause of V7AB showing twice in the Upcoming cards after
+  // its ex-date was corrected from 2026-05-13 to 2026-05-19 — the old
+  // 2026-05-13/pay 2026-05-27 row was never removed.
+  if (_editingManualEntryOriginalExDate &&
+      _editingManualEntryOriginalExDate.sym === sym &&
+      _editingManualEntryOriginalExDate.exDate !== exDate) {
+    const orig = _editingManualEntryOriginalExDate;
+    const all  = getManualDeclarations().filter(e => !(e.sym === orig.sym && e.exDate === orig.exDate));
+    saveManualDeclarations(all);
+    removeManualEntryFromDivCache(orig.sym, exch, orig.exDate);
+  }
+
   saveManualEntry(sym, exch, exDate, payDate, dps, ccy);
+
+  // Clear edit-mode state now that the save has gone through
+  _editingManualEntryOriginalExDate = null;
+  const banner = document.getElementById('mdiv-editing-banner');
+  const saveBtn = document.getElementById('mdiv-save-btn');
+  if (banner) banner.style.display = 'none';
+  if (saveBtn) saveBtn.textContent = 'Save';
+
   // Re-render the panel to show the new entry
   renderManualEntryPanel();
 }
 
+// ─── YAHOO FALLBACK FOR UPCOMING/RECENT DIVIDENDS ──────────────────────
+// dividends.sg is the primary source for "upcoming" cards (it's the only
+// source that reliably gives multi-week advance notice of a declared SGX
+// dividend). But dividends.sg's own coverage lags for some tickers — it
+// can fail to post an ex-date/pay-date for weeks after the company has
+// already declared it, while Yahoo's chart-events payload already has it.
+// Confirmed live 2026-06-27 on Y03 (Yeo Hiap Seng): Yahoo had ex 2026-05-11
+// weeks before dividends.sg ever posted a 2026 row at all — by the time
+// dividends.sg might catch up, the dividend will already be paid and the
+// "upcoming" cards will have shown nothing for the entire window.
+//
+// This fills that gap WITHOUT pretending Yahoo gives the same advance
+// notice dividends.sg does: it only surfaces entries within a grace
+// window around "now", badged distinctly as "yahoo" rather than
+// "dividends.sg", so the person can tell at a glance this wasn't a
+// confirmed SGX announcement with weeks of lead time — just Yahoo's own
+// dividend-events record, surfaced here only because nothing else caught
+// it in time.
+//
+// Two different window widths, depending on what we actually know:
+//   - PAY_DATE_WINDOW_DAYS: used when sgxPayDateCache has a real pay date
+//     for this ex-date (precise anchor — narrow window is fine).
+//   - EX_DATE_ONLY_WINDOW_DAYS: used when we only have the ex-date (no
+//     pay date backfilled anywhere yet — exactly Y03's situation, since
+//     dividends.sg never posted ANY 2026 row, so sgxPayDateCache was
+//     never populated for it either). SGX ex-to-pay gaps commonly run
+//     4-8 weeks, so anchoring a narrow window on ex-date alone would
+//     miss the entry for most of that gap — defeating the purpose this
+//     was built for.
+//
+// CRITICAL: the window must be FORWARD-LOOKING ONLY when we have a real
+// pay date. Using Math.abs() here (original bug, fixed 2026-06-27) made
+// "5 days until pay date" and "5 days since pay date" indistinguishable —
+// confirmed live on BUOU: ex 2026-05-14, pay 2026-06-22 (5 days in the
+// past as of 2026-06-27), still passed the abs()-based window and kept
+// showing in both Upcoming cards as if still owed, when it had already
+// been paid. A dividend with a KNOWN real pay date in the past is never
+// "upcoming" — full stop, no grace period in that direction.
+// The ex-date-only case still allows a SMALL backward grace window
+// (EX_DATE_ONLY_BACKWARD_GRACE_DAYS) because without a real pay date we
+// genuinely don't know if it's been paid yet — Y03's case: ex-date alone
+// was 47 days in the past, dividend was almost certainly already paid by
+// the time it was shown, which is a known, accepted imprecision of this
+// fallback (documented in the original Y03 fix) — but that grace window
+// is intentionally much smaller than the full forward window, and never
+// applies once we have an actual confirmed pay date.
+//
+// Only returns symbols NOT already present in announcedDivCache (any
+// source) — dividends.sg/manual entries always take priority when they
+// exist, since they're more reliable for pay-date and DPS precision.
+const YAHOO_FALLBACK_PAY_DATE_FORWARD_WINDOW_DAYS  = 14;
+const YAHOO_FALLBACK_PAY_DATE_BACKWARD_GRACE_DAYS  = 2;
+const YAHOO_FALLBACK_EX_DATE_FORWARD_WINDOW_DAYS   = 60;
+const YAHOO_FALLBACK_EX_DATE_BACKWARD_GRACE_DAYS   = 60;
+function getYahooFallbackUpcomingDivs() {
+  const now = new Date();
+  const out = [];
+
+  Object.values(portfolio.holdings).forEach(hld => {
+    if (announcedDivCache[hld.sym]) return; // dividends.sg/manual already covers this symbol
+    if (NON_DIVIDEND_SYMS.has(hld.sym)) return;
+
+    const ticker = getYahooTicker(hld.sym, hld.exch);
+    const cached = ticker ? divCache[ticker] : null;
+    if (!cached?.dividends?.length) return;
+
+    // Most recent dividend Yahoo knows about for this symbol (dividends
+    // array is sorted ascending by ex-date — see fetchAllPrices()).
+    const latest = cached.dividends[cached.dividends.length - 1];
+    if (!latest) return;
+
+    const exDate = latest.date;
+    // sgxPayDateCache may have a real pay date even when announcedDivCache
+    // doesn't (the two caches are populated independently — see parseViewPage).
+    const exDateStr  = exDate.toISOString().slice(0, 10);
+    const sgxPayStr  = sgxPayDateCache[hld.sym]?.[exDateStr];
+    const payDate    = sgxPayStr ? new Date(sgxPayStr) : null;
+    const anchorDate = payDate || exDate; // what we judge "recent/soon" against
+    const diffMs     = anchorDate - now;  // POSITIVE = still in the future, NEGATIVE = already passed
+    const forwardMs  = (payDate ? YAHOO_FALLBACK_PAY_DATE_FORWARD_WINDOW_DAYS  : YAHOO_FALLBACK_EX_DATE_FORWARD_WINDOW_DAYS)  * 86400000;
+    const backwardMs = (payDate ? YAHOO_FALLBACK_PAY_DATE_BACKWARD_GRACE_DAYS : YAHOO_FALLBACK_EX_DATE_BACKWARD_GRACE_DAYS) * 86400000;
+
+    if (diffMs > forwardMs) return;   // too far in the future — not yet worth showing
+    if (diffMs < -backwardMs) return; // too far in the past — already paid/concluded, exclude
+
+    const dps      = latest.amount;
+    if (!dps) return;
+    const grossSGD = toSGD(hld.shares * dps, hld.ccy);
+
+    out.push({
+      sym: hld.sym, exch: hld.exch, exDate, payDate,
+      dps, currency: hld.ccy, source: 'yahoo',
+      sharesHeld: hld.shares, grossSGD
+
+    });
+  });
+
+  return out;
+}
+
 // ─── RENDER UPCOMING ANNOUNCED ────────────────────────────────────────
+function renderUpcomingDivEntry(e, now) {
+  const daysAway  = Math.ceil((e.exDate - now) / 86400000);
+  const exStr     = e.exDate.toISOString().slice(0,10);
+  const payStr    = e.payDate ? e.payDate.toISOString().slice(0,10) : '—';
+  const srcBadge  = e.source === 'dividends.sg'
+    ? `<span class="price-badge price-live" title="Source: dividends.sg (SGX declared announcement)">dividends.sg</span>`
+    : e.source === 'manual'
+    ? `<span class="price-badge price-live" style="background:rgba(83,74,183,0.12);color:var(--purple)" title="Manually entered">manual</span>`
+    : e.source === 'yahoo'
+    ? `<span class="price-badge price-est" style="background:rgba(186,117,23,0.12);color:var(--amber)" title="Source: Yahoo Finance only — dividends.sg has not posted this yet, and may already be paid.">yahoo</span>`
+    : `<span class="price-badge price-est">upcoming</span>`;
+  const dpsLabel  = e.dpsEstimated
+    ? `<span style="margin-left:6px;color:var(--text-secondary)">DPS: <strong style="color:var(--text-primary)">${e.currency} ${e.dps.toFixed(4)}</strong> <span style="font-size:10px;color:var(--amber)">(est.)</span></span>`
+    : `<span style="margin-left:6px;color:var(--text-secondary)">DPS: <strong style="color:var(--text-primary)">${e.currency} ${e.dps.toFixed(4)}</strong></span>`;
+  const urgency   = daysAway <= 7  ? 'color:var(--red);font-weight:600'
+                  : daysAway <= 30 ? 'color:var(--amber);font-weight:500'
+                  : 'color:var(--text-secondary)';
+  return `<div class="div-entry" style="grid-template-columns:80px 1fr auto auto auto;gap:8px 12px;align-items:start">
+    <span>${symWithName(e.sym)}</span>
+    <span style="font-size:12px">
+      ${srcBadge}
+      ${dpsLabel}
+      <span style="margin-left:6px;font-size:11px;color:var(--text-secondary)">Pay: ${payStr}</span>
+    </span>
+    <span style="font-size:12px;color:var(--text-secondary);white-space:nowrap">Ex: ${exStr}</span>
+    <span style="font-size:12px;white-space:nowrap;${urgency}">${daysAway}d</span>
+    <span style="font-weight:500;color:var(--green);white-space:nowrap">S$${fmt(e.grossSGD)}</span>
+  </div>`;
+}
+
+const UPCOMING_DIV_COMPACT_ROWS = 5;
+
 function renderUpcomingAnnounced() {
   const el  = document.getElementById('div-upcoming');
+  const totalEl     = document.getElementById('div-upcoming-total');
+  const totalFullEl = document.getElementById('div-upcoming-total-full');
+  const fullEl      = document.getElementById('div-upcoming-full');
+  const expandLink  = document.getElementById('upcoming-div-expand-link');
   if (!el) return;
   const now = new Date();
 
-  // Only show entries from announcedDivCache (populated by dividends.sg only).
-  // No fallback — if nothing is declared on dividends.sg, show nothing.
+  // Primary source: announcedDivCache (dividends.sg + manual entries).
   const activeSyms = new Set(Object.keys(portfolio.holdings));
   const entries = {};
   Object.entries(announcedDivCache).forEach(([sym, entry]) => {
@@ -9213,41 +10452,46 @@ function renderUpcomingAnnounced() {
     .filter(e => (e.payDate ? e.payDate > now : e.exDate > now) && (e.source === 'dividends.sg' || e.source === 'manual'))
     .sort((a, b) => a.exDate - b.exDate);
 
-  if (!upcoming.length) {
-    el.innerHTML = `<p style="color:var(--text-secondary);font-size:13px;padding:16px 0">
+  // Fallback: Yahoo-sourced entries for symbols dividends.sg hasn't covered.
+  // Shown within a short grace window either side of now (see helper above) —
+  // not restricted to future-only, since the whole point is to catch entries
+  // that are already at/just past ex-date but not yet on dividends.sg.
+  const yahooFallback = getYahooFallbackUpcomingDivs();
+
+  // Sort the MERGED list by ex-date — sorting each source separately and
+  // concatenating (previous bug, fixed 2026-06-27) put every Yahoo-fallback
+  // entry after every dividends.sg entry regardless of actual date, e.g.
+  // Y03 going ex well before most dividends.sg entries still sorted near
+  // the bottom of the card instead of near the top.
+  const combined = [...upcoming, ...yahooFallback].sort((a, b) => a.exDate - b.exDate);
+
+  // Real "next 60 days" total — the card's title says "next 60 days" but the
+  // list above it isn't actually capped to that window (it shows everything
+  // "not yet paid", which for declared dividends.sg/manual entries can run
+  // well beyond 60 days out). Added 2026-06-28 so the title's claim is
+  // backed by an actual number rather than just being descriptive text.
+  const sixtyDaysOut = new Date(now.getTime() + 60 * 86400000);
+  const within60 = combined.filter(e => e.exDate <= sixtyDaysOut);
+  const total60  = within60.reduce((s, e) => s + e.grossSGD, 0);
+  const totalText = `Total: S$${fmt(total60)} next 60 days (${within60.length} payment${within60.length === 1 ? '' : 's'})`;
+  if (totalEl)     totalEl.textContent     = combined.length ? totalText : '';
+  if (totalFullEl) totalFullEl.textContent = combined.length ? totalText : '';
+
+  if (!combined.length) {
+    const emptyMsg = `<p style="color:var(--text-secondary);font-size:13px;padding:16px 0">
       No declared upcoming ex-dividend dates found.
       Click <strong>Refresh</strong> to fetch live announcements from SGX and Yahoo Finance.
     </p>`;
+    el.innerHTML = emptyMsg;
+    if (fullEl) fullEl.innerHTML = emptyMsg;
+    if (expandLink) expandLink.style.display = 'none';
     return;
   }
 
-  el.innerHTML = upcoming.map(e => {
-    const daysAway  = Math.ceil((e.exDate - now) / 86400000);
-    const exStr     = e.exDate.toISOString().slice(0,10);
-    const payStr    = e.payDate ? e.payDate.toISOString().slice(0,10) : '—';
-    const srcBadge  = e.source === 'dividends.sg'
-      ? `<span class="price-badge price-live" title="Source: dividends.sg (SGX declared announcement)">dividends.sg</span>`
-      : e.source === 'manual'
-      ? `<span class="price-badge price-live" style="background:rgba(83,74,183,0.12);color:var(--purple)" title="Manually entered">manual</span>`
-      : `<span class="price-badge price-est">upcoming</span>`;
-    const dpsLabel  = e.dpsEstimated
-      ? `<span style="margin-left:6px;color:var(--text-secondary)">DPS: <strong style="color:var(--text-primary)">${e.currency} ${e.dps.toFixed(4)}</strong> <span style="font-size:10px;color:var(--amber)">(est.)</span></span>`
-      : `<span style="margin-left:6px;color:var(--text-secondary)">DPS: <strong style="color:var(--text-primary)">${e.currency} ${e.dps.toFixed(4)}</strong></span>`;
-    const urgency   = daysAway <= 7  ? 'color:var(--red);font-weight:600'
-                    : daysAway <= 30 ? 'color:var(--amber);font-weight:500'
-                    : 'color:var(--text-secondary)';
-    return `<div class="div-entry" style="grid-template-columns:80px 1fr auto auto auto;gap:8px 12px;align-items:start">
-      <span>${symWithName(e.sym)}</span>
-      <span style="font-size:12px">
-        ${srcBadge}
-        ${dpsLabel}
-        <span style="margin-left:6px;font-size:11px;color:var(--text-secondary)">Pay: ${payStr}</span>
-      </span>
-      <span style="font-size:12px;color:var(--text-secondary);white-space:nowrap">Ex: ${exStr}</span>
-      <span style="font-size:12px;white-space:nowrap;${urgency}">${daysAway}d</span>
-      <span style="font-weight:500;color:var(--green);white-space:nowrap">S$${fmt(e.grossSGD)}</span>
-    </div>`;
-  }).join('');
+  const compactRows = combined.slice(0, UPCOMING_DIV_COMPACT_ROWS);
+  el.innerHTML = compactRows.map(e => renderUpcomingDivEntry(e, now)).join('');
+  if (fullEl) fullEl.innerHTML = combined.map(e => renderUpcomingDivEntry(e, now)).join('');
+  if (expandLink) expandLink.style.display = combined.length > UPCOMING_DIV_COMPACT_ROWS ? '' : 'none';
 }
 
 // ─── DIVIDEND BY CURRENCY ─────────────────────────────────────────────
@@ -9556,6 +10800,19 @@ function renderSavedCorrections() {
     ? `${entries.length} correction${entries.length !== 1 ? 's' : ''}`
     : 'none saved';
 
+  // Mirror the same visibility/count onto the duplicate card on the
+  // Import/Settings tab — see that card's HTML comment for why it exists.
+  const exportJsonBtnS = document.getElementById('sc-export-json-settings');
+  const exportCsvBtnS  = document.getElementById('sc-export-csv-settings');
+  const clearAllBtnS   = document.getElementById('sc-clear-all-settings');
+  const countS         = document.getElementById('saved-corrections-count-settings');
+  if (exportJsonBtnS) exportJsonBtnS.style.display = hasData ? '' : 'none';
+  if (exportCsvBtnS)  exportCsvBtnS.style.display  = hasData ? '' : 'none';
+  if (clearAllBtnS)   clearAllBtnS.style.display   = hasData ? '' : 'none';
+  if (countS) countS.textContent = hasData
+    ? `${entries.length} correction${entries.length !== 1 ? 's' : ''}`
+    : 'none saved';
+
   if (!hasData) {
     tbody.innerHTML = `<tr><td colspan="5" style="padding:12px 10px;color:var(--text-secondary);font-size:12px">
       No corrections saved yet. Use <strong>Import CSV/JSON</strong> above to restore a previous export,
@@ -9803,6 +11060,138 @@ function importDivCorrections(input) {
 }
 
 // ─── DIVIDENDS (NEW) ──────────────────────────────────────────────────
+// ── Dividends received by year — range selector ──────────────────────
+// ALL/5Y/3Y keep the existing one-bar-per-calendar-year view (just
+// filtered to that many trailing years). YTD switches the chart to a
+// completely different granularity — one bar per MONTH of the current
+// year only — since a single "this year so far" bar next to full-year
+// bars wouldn't be a meaningful comparison or very informative on its own.
+let divReceivedRange = 'ALL';
+
+function setDivReceivedRange(r, btn) {
+  divReceivedRange = r;
+  btn.parentElement.querySelectorAll('.rbtn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  renderDivReceivedChart(portfolio._divHistoryRows || []);
+}
+
+function renderDivReceivedChart(historyRows) {
+  const STACK_COLORS = ['#1D9E75','#378ADD','#BA7517','#534AB7','#D4537E','#5DCAA5','#F09595','#85B7EB','#E8751A','#888780'];
+  destroyChart('divReceivedChart');
+  const canvas = document.getElementById('divReceivedChart');
+  if (!canvas) return;
+
+  if (divReceivedRange === 'YTD') {
+    // One bar per month of the CURRENT year only, stacked by symbol.
+    const now = new Date();
+    const curY = now.getFullYear();
+    const mNames = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+    const byMonthBySym = {}; // { monthIdx(0-11): { sym: sgdAmount } }
+    const allSymsYtd = [];
+    historyRows.forEach(r => {
+      if (r.date.getFullYear() !== curY) return;
+      const m = r.date.getMonth();
+      if (!byMonthBySym[m]) byMonthBySym[m] = {};
+      byMonthBySym[m][r.sym] = (byMonthBySym[m][r.sym] || 0) + r.grossSGD;
+      if (!allSymsYtd.includes(r.sym)) allSymsYtd.push(r.sym);
+    });
+    // Only show months up to and including the current month — no point
+    // showing 8 empty trailing bars for a January YTD view.
+    const monthIdxs = []; for (let m = 0; m <= now.getMonth(); m++) monthIdxs.push(m);
+    allSymsYtd.sort((a, b) =>
+      monthIdxs.reduce((s, m) => s + (byMonthBySym[m]?.[b] || 0), 0) -
+      monthIdxs.reduce((s, m) => s + (byMonthBySym[m]?.[a] || 0), 0)
+    );
+    const labels = monthIdxs.map(m => mNames[m]);
+    const datasets = allSymsYtd.map((sym, i) => ({
+      label: sym,
+      data: monthIdxs.map(m => byMonthBySym[m]?.[sym] || 0),
+      backgroundColor: STACK_COLORS[i % STACK_COLORS.length],
+      borderRadius: i === allSymsYtd.length - 1 ? 4 : 0,
+      stack: 'divs'
+    }));
+    if (!monthIdxs.length || !allSymsYtd.length) return;
+    portfolio.allCharts.divReceivedChart = new Chart(canvas, {
+      type: 'bar',
+      data: { labels, datasets },
+      options: { responsive: true, maintainAspectRatio: false,
+        scales: {
+          x: { stacked: true, grid: { display: false }, ticks: { font: { size: 11 }, color: '#888' } },
+          y: { stacked: true, grid: { color: 'rgba(128,128,128,0.1)' }, ticks: { callback: v => 'S$' + (v >= 1000 ? (v/1000).toFixed(0) + 'k' : fmt(v)), font: { size: 11 }, color: '#888' } }
+        },
+        plugins: {
+          legend: {
+            display: allSymsYtd.length <= 12,
+            position: 'bottom',
+            labels: { font: { size: 10 }, color: '#888', boxWidth: 10, padding: 6 }
+          },
+          tooltip: {
+            callbacks: {
+              title: ctx => `${ctx[0].label} ${curY} — S$${fmt(Object.values(byMonthBySym[monthIdxs[ctx[0].dataIndex]] || {}).reduce((a,b)=>a+b,0))} total`,
+              label: ctx => `${ctx.dataset.label}: S$${fmt(ctx.parsed.y)}`
+            }
+          }
+        }
+      }
+    });
+    return;
+  }
+
+  // ALL / 5Y / 3Y — one bar per calendar year, optionally trimmed to the
+  // last N years. Unchanged from the original always-ALL behaviour except
+  // for the trailing-years filter.
+  const byYearBySym = {};  // { year: { sym: sgdAmount } }
+  const allSymsInHist = [];
+  historyRows.forEach(r => {
+    const y = r.date.toISOString().slice(0, 4);
+    if (!byYearBySym[y]) byYearBySym[y] = {};
+    byYearBySym[y][r.sym] = (byYearBySym[y][r.sym] || 0) + r.grossSGD;
+    if (!allSymsInHist.includes(r.sym)) allSymsInHist.push(r.sym);
+  });
+  let years = Object.keys(byYearBySym).sort();
+  if (divReceivedRange === '5Y') years = years.slice(-5);
+  else if (divReceivedRange === '3Y') years = years.slice(-3);
+  // Sort syms by total income (within the displayed years only) descending
+  // so biggest contributors are at bottom — recalculated per range so a
+  // symbol that only mattered outside the trimmed window doesn't crowd
+  // out the bottom slot for one that's actually significant within it.
+  allSymsInHist.sort((a, b) =>
+    years.reduce((s, y) => s + (byYearBySym[y][b] || 0), 0) -
+    years.reduce((s, y) => s + (byYearBySym[y][a] || 0), 0)
+  );
+  const stackedDatasets = allSymsInHist.map((sym, i) => ({
+    label: sym,
+    data: years.map(y => byYearBySym[y][sym] || 0),
+    backgroundColor: STACK_COLORS[i % STACK_COLORS.length],
+    borderRadius: i === allSymsInHist.length - 1 ? 4 : 0,  // round only top segment
+    stack: 'divs'
+  }));
+  if (!years.length) return;
+  portfolio.allCharts.divReceivedChart = new Chart(canvas, {
+    type: 'bar',
+    data: { labels: years, datasets: stackedDatasets },
+    options: { responsive: true, maintainAspectRatio: false,
+      scales: {
+        x: { stacked: true, grid: { display: false }, ticks: { font: { size: 11 }, color: '#888' } },
+        y: { stacked: true, grid: { color: 'rgba(128,128,128,0.1)' }, ticks: { callback: v => 'S$' + (v >= 1000 ? (v/1000).toFixed(0) + 'k' : fmt(v)), font: { size: 11 }, color: '#888' } }
+      },
+      plugins: {
+        legend: {
+          display: allSymsInHist.length <= 12,
+          position: 'bottom',
+          labels: { font: { size: 10 }, color: '#888', boxWidth: 10, padding: 6 }
+        },
+        tooltip: {
+          callbacks: {
+            title: ctx => `${ctx[0].label} — S$${fmt(years.indexOf(ctx[0].label) >= 0 ? Object.values(byYearBySym[ctx[0].label]).reduce((a,b)=>a+b,0) : 0)} total`,
+            label: ctx => `${ctx.dataset.label}: S$${fmt(ctx.parsed.y)}`
+          }
+        }
+      }
+    }
+  });
+}
+
 function renderDividends() {
   renderSavedCorrections();
   const h = portfolio.holdings;
@@ -9874,6 +11263,10 @@ function renderDividends() {
     });
   });
   historyRows.sort((a, b) => a.date - b.date);
+  // Cached for setDivReceivedRange() / renderDivReceivedChart() — switching
+  // the All/5Y/3Y/YTD range re-renders just this one chart, not the whole
+  // (expensive) renderDividends() pipeline that builds historyRows.
+  portfolio._divHistoryRows = historyRows;
 
   // ── Project forward dividends ──────────────────────────────────────
   // Two-pass approach:
@@ -10047,55 +11440,7 @@ function renderDividends() {
   document.getElementById('div-data-note').textContent = note;
 
   // ── Historical received by year chart ────────────────────────────
-  // ── Dividends received by year — stacked by symbol ───────────────
-  const byYearBySym = {};  // { year: { sym: sgdAmount } }
-  const allSymsInHist = [];
-  historyRows.forEach(r => {
-    const y = r.date.toISOString().slice(0, 4);
-    if (!byYearBySym[y]) byYearBySym[y] = {};
-    byYearBySym[y][r.sym] = (byYearBySym[y][r.sym] || 0) + r.grossSGD;
-    if (!allSymsInHist.includes(r.sym)) allSymsInHist.push(r.sym);
-  });
-  const years = Object.keys(byYearBySym).sort();
-  // Sort syms by total income descending so biggest contributors are at bottom
-  allSymsInHist.sort((a, b) =>
-    years.reduce((s, y) => s + (byYearBySym[y][b] || 0), 0) -
-    years.reduce((s, y) => s + (byYearBySym[y][a] || 0), 0)
-  );
-  const STACK_COLORS = ['#1D9E75','#378ADD','#BA7517','#534AB7','#D4537E','#5DCAA5','#F09595','#85B7EB','#E8751A','#888780'];
-  const stackedDatasets = allSymsInHist.map((sym, i) => ({
-    label: sym,
-    data: years.map(y => byYearBySym[y][sym] || 0),
-    backgroundColor: STACK_COLORS[i % STACK_COLORS.length],
-    borderRadius: i === allSymsInHist.length - 1 ? 4 : 0,  // round only top segment
-    stack: 'divs'
-  }));
-  destroyChart('divReceivedChart');
-  if (years.length) {
-    portfolio.allCharts.divReceivedChart = new Chart(document.getElementById('divReceivedChart'), {
-      type: 'bar',
-      data: { labels: years, datasets: stackedDatasets },
-      options: { responsive: true, maintainAspectRatio: false,
-        scales: {
-          x: { stacked: true, grid: { display: false }, ticks: { font: { size: 11 }, color: '#888' } },
-          y: { stacked: true, grid: { color: 'rgba(128,128,128,0.1)' }, ticks: { callback: v => 'S$' + (v >= 1000 ? (v/1000).toFixed(0) + 'k' : fmt(v)), font: { size: 11 }, color: '#888' } }
-        },
-        plugins: {
-          legend: {
-            display: allSymsInHist.length <= 12,
-            position: 'bottom',
-            labels: { font: { size: 10 }, color: '#888', boxWidth: 10, padding: 6 }
-          },
-          tooltip: {
-            callbacks: {
-              title: ctx => `${ctx[0].label} — S$${fmt(years.indexOf(ctx[0].label) >= 0 ? Object.values(byYearBySym[ctx[0].label]).reduce((a,b)=>a+b,0) : 0)} total`,
-              label: ctx => `${ctx.dataset.label}: S$${fmt(ctx.parsed.y)}`
-            }
-          }
-        }
-      }
-    });
-  }
+  renderDivReceivedChart(historyRows);
 
   // ── Projected monthly chart ───────────────────────────────────────
   const futureLabels = [];
@@ -10128,25 +11473,35 @@ function renderDividends() {
       `by pay date · S$${fmt(ytdTotal)} received ${now.getFullYear()}`;
   }
 
-  const ytdEl = document.getElementById('div-ytd-by-paydate');
+  const YTD_DIV_COMPACT_ROWS = 5;
+  function renderYtdDivEntry(r) {
+    const payStr = r.payDate.toISOString().slice(0, 10);
+    const dateBadge = r.payDateIsReal
+      ? `<span class="price-badge price-live" title="Confirmed pay date">paid</span>`
+      : `<span class="price-badge price-est" title="No confirmed pay date on file — ex-date used as a stand-in">ex-date</span>`;
+    return `<div class="div-entry">
+      <span style="min-width:78px;color:var(--text-secondary)">${payStr}</span>
+      <span style="flex:1">${symWithName(r.sym)} ${dateBadge}</span>
+      <span style="color:var(--text-secondary);margin-right:8px">${r.ccy} ${r.dps.toFixed(4)} × ${fmt(r.shares)}</span>
+      <span style="font-weight:500;color:var(--green)">S$${fmt(r.grossSGD)}</span>
+    </div>`;
+  }
+
+  const ytdEl       = document.getElementById('div-ytd-by-paydate');
+  const ytdFullEl   = document.getElementById('div-ytd-by-paydate-full');
+  const ytdExpandLink = document.getElementById('ytd-div-expand-link');
   if (ytdEl) {
     if (!ytdRows.length) {
-      ytdEl.innerHTML = `<p style="color:var(--text-secondary);font-size:13px;padding:16px 0">
+      const emptyMsg = `<p style="color:var(--text-secondary);font-size:13px;padding:16px 0">
         No dividends received yet this year.
       </p>`;
+      ytdEl.innerHTML = emptyMsg;
+      if (ytdFullEl) ytdFullEl.innerHTML = emptyMsg;
+      if (ytdExpandLink) ytdExpandLink.style.display = 'none';
     } else {
-      ytdEl.innerHTML = ytdRows.map(r => {
-        const payStr = r.payDate.toISOString().slice(0, 10);
-        const dateBadge = r.payDateIsReal
-          ? `<span class="price-badge price-live" title="Confirmed pay date">paid</span>`
-          : `<span class="price-badge price-est" title="No confirmed pay date on file — ex-date used as a stand-in">ex-date</span>`;
-        return `<div class="div-entry">
-          <span style="min-width:78px;color:var(--text-secondary)">${payStr}</span>
-          <span style="flex:1">${symWithName(r.sym)} ${dateBadge}</span>
-          <span style="color:var(--text-secondary);margin-right:8px">${r.ccy} ${r.dps.toFixed(4)} × ${fmt(r.shares)}</span>
-          <span style="font-weight:500;color:var(--green)">S$${fmt(r.grossSGD)}</span>
-        </div>`;
-      }).join('');
+      ytdEl.innerHTML = ytdRows.slice(0, YTD_DIV_COMPACT_ROWS).map(renderYtdDivEntry).join('');
+      if (ytdFullEl) ytdFullEl.innerHTML = ytdRows.map(renderYtdDivEntry).join('');
+      if (ytdExpandLink) ytdExpandLink.style.display = ytdRows.length > YTD_DIV_COMPACT_ROWS ? '' : 'none';
     }
   }
 
@@ -10562,7 +11917,7 @@ function renderTransactions() {
 }
 
 function openAddTransaction() {
-  editingTxnIndex = -1;
+  editingTxnId = null;
   document.getElementById('modal-title-text').textContent = 'Add Transaction';
   document.getElementById('f-action').value = 'buy';
   document.getElementById('f-date').value = new Date().toISOString().slice(0,10);
@@ -10577,8 +11932,9 @@ function openAddTransaction() {
 }
 
 function editTransaction(idx) {
-  editingTxnIndex = idx;
   const t = portfolio.transactions[idx];
+  if (!t || !t._txnId) { editingTxnId = null; toast('Could not locate that transaction', 'error'); return; }
+  editingTxnId = t._txnId;
   document.getElementById('modal-title-text').textContent = 'Edit Transaction';
   document.getElementById('f-action').value = t.action;
   document.getElementById('f-date').value = t.date instanceof Date ? t.date.toISOString().slice(0,10) : t.date;
@@ -10590,6 +11946,17 @@ function editTransaction(idx) {
   document.getElementById('f-currency').value = t.ccy;
   document.getElementById('f-notes').value = t.notes||'';
   openModal('txn-modal');
+}
+
+// Which portfolio a NEW transaction (added via the modal, not import) should
+// land in. Import already has its own target-portfolio resolution (see
+// parseCSV) — this is only consulted by saveTransaction() for brand-new rows.
+function resolveAddTargetPfId() {
+  if (activePfIds.length === 1) return activePfIds[0];
+  if (activePfIds.length === 0 && Object.keys(pfRegistry).length === 1) {
+    return Object.keys(pfRegistry)[0]; // only one portfolio exists at all
+  }
+  return null; // ambiguous — multiple portfolios active/combined
 }
 
 function saveTransaction() {
@@ -10606,13 +11973,33 @@ function saveTransaction() {
   if (!shares && action!=='fees') { toast('Shares must be > 0', 'error'); return; }
   const isFee  = action === 'fees';
   const isSell = action === 'sell';
-  const txn = { sym, exch, date:dt, shares: isSell?-shares:shares, price, fees, ccy, isFee, action, notes };
-  if (editingTxnIndex >= 0) {
-    portfolio.transactions[editingTxnIndex] = txn;
+
+  if (editingTxnId) {
+    // EDIT — find the transaction's real home in pfRegistry and write back
+    // there, not just into the transient combined portfolio.transactions
+    // array. Writing only to the transient array was the root cause of
+    // edits silently reverting on the next processPortfolio() call.
+    const loc = findTxnLocation(editingTxnId);
+    if (!loc) { toast('Could not save — original transaction not found (it may have been deleted)', 'error'); return; }
+    const existing = pfRegistry[loc.pfId].transactions[loc.index];
+    const txn = { ...existing, sym, exch, date:dt, shares: isSell?-shares:shares, price, fees, ccy, isFee, action, notes };
+    pfRegistry[loc.pfId].transactions[loc.index] = txn;
+    savePfRegistry();
     toast(`Updated ${sym} transaction`, 'success');
   } else {
-    portfolio.transactions.push(txn);
-    portfolio.transactions.sort((a,b)=>a.date-b.date);
+    // ADD — needs a target portfolio. Ambiguous only when multiple
+    // portfolios are combined/active and there's more than one to choose
+    // from; in that case ask rather than silently guessing.
+    let targetId = resolveAddTargetPfId();
+    if (!targetId) {
+      const names = Object.values(pfRegistry).map(p => p.name).join(', ');
+      toast(`Select a single portfolio (not "All") before adding a transaction. Active portfolios: ${names}`, 'error');
+      return;
+    }
+    const txn = { sym, exch, date:dt, shares: isSell?-shares:shares, price, fees, ccy, isFee, action, notes, _txnId: newTxnId() };
+    pfRegistry[targetId].transactions.push(txn);
+    pfRegistry[targetId].transactions.sort((a,b)=>a.date-b.date);
+    savePfRegistry();
     toast(`Added ${sym} ${action}`, 'success');
   }
   closeModal('txn-modal');
@@ -10621,8 +12008,12 @@ function saveTransaction() {
 
 function deleteTransaction(idx) {
   const t = portfolio.transactions[idx];
+  if (!t || !t._txnId) { toast('Could not locate that transaction', 'error'); return; }
   if (!confirm(`Delete ${t.action.toUpperCase()} ${Math.abs(t.shares)} ${t.sym} on ${t.date instanceof Date?t.date.toISOString().slice(0,10):t.date}?`)) return;
-  portfolio.transactions.splice(idx, 1);
+  const loc = findTxnLocation(t._txnId);
+  if (!loc) { toast('Could not delete — transaction not found (it may have already been removed)', 'error'); return; }
+  pfRegistry[loc.pfId].transactions.splice(loc.index, 1);
+  savePfRegistry();
   toast(`Deleted transaction`, 'info');
   processPortfolio();
 }
@@ -11008,18 +12399,141 @@ function clearDivOverride() {
 }
 
 // ─── EXPORT CSV ───────────────────────────────────────────────────────
-function exportCSV() {
-  const rows = [['Symbol','Exchange','Type','Shares','Avg Cost','Current Price','Value SGD','P&L SGD','Return %','Weight %']];
-  Object.values(portfolio.holdings).sort((a,b)=>b.valueSGD-a.valueSGD).forEach(h=>{
-    rows.push([h.sym,h.exch,h.type,h.shares.toFixed(0),h.avgCost.toFixed(4),h.curPrice.toFixed(4),h.valueSGD.toFixed(2),h.pnl.toFixed(2),h.pnlPct.toFixed(2),h.weight.toFixed(2)]);
-  });
-  const csv = rows.map(r=>r.join(',')).join('\n');
-  const blob = new Blob([csv], {type:'text/csv'});
+// Exports the raw transaction ledger (not computed holdings) in the same
+// column shape as the StocksCafe-style source CSV, so the output can be
+// re-imported cleanly or saved back over the source file. Dates are
+// written as YYYY-MM-DD (unambiguous) rather than the source file's
+// D/M/YYYY convention — both parse correctly on re-import via parseDate().
+//
+// classification/net_cash_flow are passed through as captured at import
+// time (see parseCSV) — blank for any transaction added/edited in-app,
+// since there's nothing genuine to carry through for those.
+
+function csvField(v) {
+  const s = v === null || v === undefined ? '' : String(v);
+  // Quote any field containing a comma, quote, or newline — several real
+  // classification values do contain commas, e.g. "MCB Redemption (2021
+  // Tranche, 2nd Partial)", so a naive comma-join would silently corrupt
+  // the file (extra column, misaligned data) rather than error visibly.
+  if (/[",\n]/.test(s)) return '"' + s.replace(/"/g, '""') + '"';
+  return s;
+}
+
+function txnToCSVRow(t) {
+  const d = t.date instanceof Date ? t.date : new Date(t.date);
+  const dateStr = isNaN(d.getTime()) ? '' : d.toISOString().slice(0, 10);
+  const actionLabel = t.isFee ? 'Fees' : (t.shares < 0 ? 'Sell' : 'Buy');
+  return [
+    actionLabel, t.exch, t.sym, dateStr,
+    Math.abs(t.shares), t.price, t.fees, t.ccy,
+    t.notes || '', t.classification || '', t.netCashFlow ?? ''
+  ].map(csvField).join(',');
+}
+
+const EXPORT_CSV_HEADER = 'action,exchange,symbol,date,shares,price,fees,currency,notes,classification,net_cash_flow';
+
+const LAST_EXPORT_KEY = 'lastExportAt';
+const BACKUP_REMINDER_INTERVAL_MS = 7 * 24 * 60 * 60 * 1000; // weekly, per user's choice 2026-06-26
+
+function downloadCSVText(text, filename) {
+  const blob = new Blob([text], { type: 'text/csv' });
   const a = document.createElement('a');
   a.href = URL.createObjectURL(blob);
-  a.download = `portfolio-${new Date().toISOString().slice(0,10)}.csv`;
+  a.download = filename;
   a.click();
-  toast('CSV exported', 'success');
+  URL.revokeObjectURL(a.href);
+  // Single chokepoint every export path (single/combined/separate-all) funnels
+  // through to actually trigger a download — recording the timestamp here,
+  // rather than in each calling function individually, guarantees it's
+  // captured exactly once per real download regardless of entry point.
+  try { localStorage.setItem(LAST_EXPORT_KEY, String(Date.now())); } catch {}
+}
+
+function checkBackupReminder() {
+  let lastExport;
+  try { lastExport = parseInt(localStorage.getItem(LAST_EXPORT_KEY) || '0', 10); } catch { lastExport = 0; }
+  const elapsed = Date.now() - lastExport;
+  const banner = document.getElementById('backup-reminder-banner');
+  if (!banner) return;
+  if (elapsed < BACKUP_REMINDER_INTERVAL_MS) { banner.classList.add('hidden'); return; }
+
+  const text = document.getElementById('backup-reminder-text');
+  if (lastExport === 0) {
+    text.textContent = "You haven't backed up your transactions to CSV yet.";
+  } else {
+    const days = Math.floor(elapsed / 86400000);
+    text.textContent = `It's been ${days} day${days === 1 ? '' : 's'} since your last backup.`;
+  }
+  banner.classList.remove('hidden');
+}
+
+// "Remind me later" only snoozes for the rest of THIS browser session — it
+// deliberately does not write to localStorage, so the banner reappears on
+// the next fresh load if the interval is still exceeded. A reminder that
+// can be permanently silenced by one dismiss defeats the point of it.
+function dismissBackupReminder() {
+  const banner = document.getElementById('backup-reminder-banner');
+  if (banner) banner.classList.add('hidden');
+}
+
+function exportPortfolioCSV(pfId) {
+  const pf = pfRegistry[pfId];
+  if (!pf) { toast('Portfolio not found', 'error'); return; }
+  const rows = [EXPORT_CSV_HEADER, ...pf.transactions.map(txnToCSVRow)];
+  const safeName = (pf.name || pfId).replace(/[^a-z0-9_-]+/gi, '_');
+  downloadCSVText(rows.join('\n'), `${safeName}-${new Date().toISOString().slice(0,10)}.csv`);
+  toast(`Exported ${pf.transactions.length} transactions from "${pf.name}"`, 'success');
+}
+
+function exportAllPortfoliosCombinedCSV() {
+  const all = Object.values(pfRegistry).flatMap(pf => pf.transactions);
+  const rows = [EXPORT_CSV_HEADER, ...all.map(txnToCSVRow)];
+  downloadCSVText(rows.join('\n'), `all-portfolios-combined-${new Date().toISOString().slice(0,10)}.csv`);
+  toast(`Exported ${all.length} transactions across ${Object.keys(pfRegistry).length} portfolio(s)`, 'success');
+}
+
+function exportAllPortfoliosSeparateCSVs() {
+  const ids = Object.keys(pfRegistry);
+  ids.forEach(id => exportPortfolioCSV(id));
+  toast(`Exported ${ids.length} separate CSV files`, 'success');
+}
+
+// Entry point — the Export button in the topbar still calls exportCSV().
+// With one portfolio, exports it directly with no extra clicks. With more
+// than one, opens a picker rather than guessing which one(s) the user
+// means — activePfIds reflects what's currently selected via the chip
+// bar, so that's offered as the likely intended default, not assumed.
+function exportCSV() {
+  const ids = Object.keys(pfRegistry);
+  if (ids.length === 0) { toast('Nothing to export', 'error'); return; }
+  if (ids.length === 1) { exportPortfolioCSV(ids[0]); return; }
+  openExportModal();
+}
+
+function openExportModal() {
+  const ids = Object.keys(pfRegistry);
+  const body = document.getElementById('export-modal-options');
+  const activeLabel = activePfIds.length === 1
+    ? `Currently selected: ${pfRegistry[activePfIds[0]]?.name || activePfIds[0]}`
+    : activePfIds.length > 1
+      ? `Currently selected: ${activePfIds.length} portfolios (combined view)`
+      : `Currently selected: All (combined view)`;
+  document.getElementById('export-modal-active-hint').textContent = activeLabel;
+  body.innerHTML = ids.map(id => `
+    <label class="form-field" style="flex-direction:row;align-items:center;gap:8px;cursor:pointer">
+      <input type="radio" name="export-pf-choice" value="${id}">
+      <span>${pfRegistry[id].name} <span style="color:var(--text-secondary)">(${pfRegistry[id].transactions.length} txns)</span></span>
+    </label>`).join('');
+  openModal('export-modal');
+}
+
+function confirmExportFromModal(mode) {
+  if (mode === 'all-combined') { exportAllPortfoliosCombinedCSV(); closeModal('export-modal'); return; }
+  if (mode === 'all-separate')  { exportAllPortfoliosSeparateCSVs(); closeModal('export-modal'); return; }
+  const checked = document.querySelector('input[name="export-pf-choice"]:checked');
+  if (!checked) { toast('Pick a portfolio to export, or use one of the "all" options', 'error'); return; }
+  exportPortfolioCSV(checked.value);
+  closeModal('export-modal');
 }
 
 // ─── NAV RANGE ────────────────────────────────────────────────────────
@@ -11114,12 +12628,13 @@ function addImportPortfolio() {
 }
 
 // ─── PAGE INIT ────────────────────────────────────────────────────────
-// Registry starts empty on every page load — user imports CSVs fresh each session.
-// Also clear any stale pfRegistry/activePfIds keys left by earlier versions
-// that persisted portfolio state to localStorage.
-localStorage.removeItem('pfRegistry');
-localStorage.removeItem('activePfIds');
-localStorage.removeItem('divOverrides');
+// NOTE: this used to unconditionally wipe pfRegistry/activePfIds/divOverrides
+// from localStorage on every load, back when the registry was designed to
+// start empty each session. That's exactly backwards now that initApp() (see
+// bottom of file) restores from those same keys on DOMContentLoaded — this
+// line was running first and deleting the data before initApp ever got to
+// read it, which is why reloads silently landed on the empty-state UI with
+// no errors: initApp was working correctly, it was just handed nothing.
 document.addEventListener('keydown', e => {
   if (e.target.tagName==='INPUT' || e.target.tagName==='SELECT' || e.target.tagName==='TEXTAREA') return;
   const tabMap = {
@@ -11216,7 +12731,32 @@ function _renderStockDetail(sym, exch) {
   const totalRetSGD   = realisedSGD + unrealisedSGD + totalDivsSGD;
   const totalRetPct   = costSGD > 0 ? totalRetSGD / costSGD * 100 : 0;
 
+  // EOD closing price + day change. For open holdings, h.eodPrice/eodDayChg
+  // are already computed by processPortfolio() using the same logic as the
+  // Holdings/EOD tables. For closed positions h is undefined, so derive the
+  // same fields directly from pc (priceCache[ticker]) — same fallback chain
+  // processPortfolio() uses: last bar = EOD close, prevClose = bar before
+  // that (or cached.prevClose if Yahoo supplied a real previous-close).
+  let eodPrice = null, eodDayChg = null, eodDayChgPct = null;
+  if (!isClosed && h) {
+    eodPrice = h.eodPrice; eodDayChg = h.eodDayChg; eodDayChgPct = h.eodDayChgPct;
+  } else if (pc?.ok && pc.closes?.length) {
+    const lastIdx = pc.closes.length - 1;
+    const c1 = pc.closes[lastIdx];
+    const c2 = pc.prevClose ?? (lastIdx >= 1 ? pc.closes[lastIdx - 1] : null);
+    if (c1 !== null && c1 !== undefined) {
+      eodPrice = c1;
+      if (c2 !== null && c2 > 0) { eodDayChg = c1 - c2; eodDayChgPct = (c1 - c2) / c2 * 100; }
+    }
+  }
+  const eodCls = eodDayChg === null ? 'neutral' : eodDayChg >= 0 ? 'up' : 'down';
+  const eodValTxt = eodPrice === null ? '—' : `${ccy} ${eodPrice.toFixed(3)}`;
+  const eodSubTxt = eodDayChg === null
+    ? (eodPrice === null ? 'no EOD data' : 'no prior close')
+    : `${eodDayChg>=0?'+':''}${ccy} ${Math.abs(eodDayChg).toFixed(3)} (${eodDayChgPct>=0?'+':''}${eodDayChgPct.toFixed(2)}%)`;
+
   const kpis = [
+    { label: 'EOD close · day change', val: eodValTxt, cls: eodCls, sub: eodSubTxt },
     isClosed
       ? { label: 'Cost basis',      val: 'S$' + fmt(costSGD), sub: ccy !== 'SGD' ? ccy + ' ' + fmt(symSells.reduce((s,r)=>s+r.costBasisNat,0)) : '' }
       : { label: 'Current value',   val: 'S$' + fmt(h.valueSGD), cls: 'up', sub: ccy !== 'SGD' ? ccy + ' ' + fmt(h.value||0) : (h.shares + ' shares') },
@@ -11508,6 +13048,32 @@ function wireSymbolClicks() {
   });
 }
 
+// ── STARTUP — runs once when the page first loads ─────────────────────
+// Previously there was no load path at all: pfRegistry/activePfIds were
+// session-only, so every reload lost all transactions and the app sat on
+// an empty Dashboard until a CSV was re-imported or "Load demo" was clicked.
+// This restores whatever was last saved, if anything, and re-renders the
+// app to match — same render sequence loadDemo() uses after seeding data.
+function initApp() {
+  const hadData = loadPfRegistry();
+  loadActivePfIds(); // must run after loadPfRegistry — validates ids against the loaded registry
+
+  if (!hadData) return; // nothing persisted yet — leave the empty-state UI as-is
+
+  portfolio.transactions = getActiveTransactions();
+  if (!portfolio.transactions.length) return; // registry existed but every portfolio was empty
+
+  processPortfolio();
+  renderPfBar();
+  refreshImportPfSelect();
+  const exportBtn = document.getElementById('btn-export');
+  if (exportBtn) exportBtn.style.display = '';
+  const names = Object.values(pfRegistry).map(p => p.name).join(', ');
+  toast(`Restored ${portfolio.transactions.length} transactions from your last session (${names})`, 'success');
+}
+
+document.addEventListener('DOMContentLoaded', initApp);
+
 </script>
 
 <!-- Ticker mapping modal -->
@@ -11571,6 +13137,46 @@ function wireSymbolClicks() {
       <button class="btn-secondary" onclick="closeModal('ca-modal')">Cancel</button>
       <button class="btn-primary" onclick="saveCorpAction()"><i class="ti ti-check"></i> Save</button>
     </div>
+  </div>
+</div>
+
+<!-- Export CSV picker modal -->
+<div class="modal-overlay" id="export-modal">
+  <div class="modal" style="max-width:440px">
+    <div class="modal-title">
+      <span>Export transactions to CSV</span>
+      <button class="modal-close" onclick="closeModal('export-modal')"><i class="ti ti-x"></i></button>
+    </div>
+    <p id="export-modal-active-hint" style="font-size:12px;color:var(--text-secondary);margin-bottom:10px"></p>
+    <div id="export-modal-options" style="display:flex;flex-direction:column;gap:6px"></div>
+    <div class="form-actions" style="flex-wrap:wrap">
+      <button class="btn-secondary" onclick="confirmExportFromModal('all-separate')">Export each as its own file</button>
+      <button class="btn-secondary" onclick="confirmExportFromModal('all-combined')">Export all combined</button>
+      <button class="btn-primary" onclick="confirmExportFromModal('single')">Export selected</button>
+    </div>
+  </div>
+</div>
+
+<!-- YTD dividends received — full list modal -->
+<div class="modal-overlay" id="ytd-div-modal">
+  <div class="modal" style="max-width:520px">
+    <div class="modal-title">
+      <span>YTD dividends received — full list</span>
+      <button class="modal-close" onclick="closeModal('ytd-div-modal')"><i class="ti ti-x"></i></button>
+    </div>
+    <div id="div-ytd-by-paydate-full" style="max-height:60vh;overflow-y:auto"></div>
+  </div>
+</div>
+
+<!-- Upcoming ex-dividend dates — full list modal -->
+<div class="modal-overlay" id="upcoming-div-modal">
+  <div class="modal" style="max-width:520px">
+    <div class="modal-title">
+      <span>Upcoming ex-dividend dates — full list</span>
+      <button class="modal-close" onclick="closeModal('upcoming-div-modal')"><i class="ti ti-x"></i></button>
+    </div>
+    <div id="div-upcoming-total-full" style="font-size:12px;color:var(--text-secondary);margin-bottom:8px"></div>
+    <div id="div-upcoming-full" style="max-height:60vh;overflow-y:auto"></div>
   </div>
 </div>
 
