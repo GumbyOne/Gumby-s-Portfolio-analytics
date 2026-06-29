@@ -2997,6 +2997,22 @@ function symWithName(sym) {
   const nameHtml = name ? `<span class="sym-name" title="${escHtml(name)}">${escHtml(name)}</span>` : '';
   return `<span class="symbol">${escHtml(sym)}</span>${nameHtml}`;
 }
+// Same as symWithName(), but the company name sits on its own line below the
+// symbol rather than inline next to it. Used in table cells where the
+// surrounding row also carries other inline content (a checkbox, an exchange
+// tag) — keeping the name inline there makes that first cell's effective
+// width swing with name length per row (e.g. "D05" vs "iShares USD Asia High
+// Yield Bond ETF"), which visually misaligns the numeric columns that follow
+// even though they're correctly column-locked. Stacking removes that swing:
+// the cell's height grows for long names instead of its apparent width.
+// exchTagHtml (optional) is appended on the FIRST line, next to the symbol —
+// not the second line with the name — since exchange code is short and
+// constant-width, and reads naturally beside the ticker rather than below it.
+function symWithNameStacked(sym, exchTagHtml = '') {
+  const name = nameCache[sym];
+  const nameHtml = name ? `<div class="sym-name" style="display:block;margin:2px 0 0;max-width:none" title="${escHtml(name)}">${escHtml(name)}</div>` : '';
+  return `<span class="symbol">${escHtml(sym)}</span>${exchTagHtml}${nameHtml}`;
+}
 
 // ─── DIVIDEND DPS CORRECTIONS ────────────────────────────────────────
 // Two-layer system:
@@ -3943,7 +3959,24 @@ function saveTickersAndRefetch() {
 
 function buildNavSeries() {
   const rawTxns = portfolio.transactions.filter(t => !t.isFee).sort((a,b) => a.date - b.date);
-  const txns = netSameDayTransactions(rawTxns).filter(t => !t.isFee);
+  const netted  = netSameDayTransactions(rawTxns).filter(t => !t.isFee);
+  // Apply corporate actions (splits/bonus/rights) BEFORE walking the daily
+  // NAV series — same pipeline order as computeRealisedPnL() and
+  // processPortfolio(). Without this, a sell entered in POST-split share
+  // terms (e.g. "sell 1000" after a stock that was bought as "100") is
+  // compared against the unadjusted buy, can drive cumShares[sym] negative,
+  // and the `cumShares[sym] < 0.001` skip-guard further down then silently
+  // zeroes that symbol out of NAV from that day forward — not because the
+  // real position ever went negative (it didn't; the split reconciles it),
+  // but because this function was the one place still walking raw,
+  // un-adjusted transactions while Holdings/Realised P&L already corrected
+  // for this. Confirmed 2026-06-29 via a real NVDA 4:1 (2021) + 10:1 (2024)
+  // split scenario that froze NVDA's contribution to NAV silently with no
+  // error and no visible symptom beyond a confusing later jump in NAV that
+  // was actually a different, unrelated, correct transaction (a USD-denominated
+  // SGX ETF buy) — the missing NVDA value just made everything after it look
+  // proportionally larger than it should.
+  const txns = applyCorpActions(netted);
   if (!txns.length) return;
   const start = txns[0].date;
 
@@ -7344,7 +7377,7 @@ function renderGroupedSummary() {
       return `<tr>
         <td style="padding-left:28px">
           <input type="checkbox" ${checked} onclick="event.stopPropagation()" onchange="toggleTickerCompare('${t.sym}', this.checked)" style="margin-right:6px;vertical-align:middle;cursor:pointer" title="Add to comparison">
-          ${symWithName(t.sym)} <span style="font-size:11px;color:var(--text-secondary)">${t.exch}</span>
+          ${symWithNameStacked(t.sym, ` <span style="font-size:11px;color:var(--text-secondary)">${t.exch}</span>`)}
         </td>
         <td style="text-align:right">${t.openCount}</td>
         <td style="text-align:right">${t.closedCount}</td>
@@ -11871,11 +11904,20 @@ function renderAnnualDividendYield(historyRows) {
 
 // ─── TRANSACTIONS (NEW) ───────────────────────────────────────────────
 function renderTransactions() {
-  let txns = [...portfolio.transactions];
-  if (!txns.length) {
+  if (!portfolio.transactions.length) {
     document.getElementById('txn-body').innerHTML = '<tr><td colspan="11" style="text-align:center;padding:32px;color:var(--text-secondary)">No transactions. Import a CSV to begin.</td></tr>';
     return;
   }
+  // Display split/bonus/rights-adjusted shares & price (today's share-count
+  // terms) so this view agrees with Holdings, Realised P&L, and the Stock
+  // Detail card, all of which already run transactions through
+  // applyCorpActions(). Pair each adjusted row with its index in the RAW
+  // portfolio.transactions array (via map, before any filtering/sorting) so
+  // edit/delete keep operating on the original as-entered transaction —
+  // editing must never write back a corp-action-adjusted number.
+  const adjAll = applyCorpActions(portfolio.transactions);
+  let txns = adjAll.map((t, i) => ({ ...t, _rawIdx: i }));
+
   const filter = document.getElementById('txn-filter').value;
   const sortBy = document.getElementById('txn-sort').value;
   const q = (document.getElementById('txn-search').value||'').toLowerCase();
@@ -11887,15 +11929,26 @@ function renderTransactions() {
   else if (sortBy==='sym-asc') txns.sort((a,b)=>a.sym.localeCompare(b.sym));
 
   const pillCls = {buy:'pill-buy', sell:'pill-sell', fees:'pill-fee'};
-  document.getElementById('txn-body').innerHTML = txns.map((t,origIdx) => {
-    const realIdx = portfolio.transactions.indexOf(t);
-    // Use actual total from CSV if available, else calculate from shares × price
+  document.getElementById('txn-body').innerHTML = txns.map((t) => {
+    const realIdx = t._rawIdx;
+    // Use actual total from CSV if available, else calculate from shares × price.
+    // total/fees are NOT corp-action-adjusted (cash amounts are unaffected by
+    // a split — only share count and per-share price are), so these read from
+    // the adjusted row's carried-through original total/fees fields.
     const value = t.total > 0 ? t.total : Math.abs(t.shares) * t.price;
     const dt = t.date instanceof Date ? t.date.toISOString().slice(0,10) : t.date;
+    // Was this row adjusted by a later corp action? Compare against the raw
+    // transaction to flag it, since the displayed shares/price now differ
+    // from what was literally entered/executed that day.
+    const raw = portfolio.transactions[realIdx];
+    const wasAdjusted = raw && (Math.abs(raw.shares - t.shares) > 0.0001 || Math.abs(raw.price - t.price) > 0.0001);
+    const splitBadge = wasAdjusted
+      ? `<i class="ti ti-adjustments" title="Adjusted for a later stock split/bonus/rights issue — shown in today's share-count terms. Originally: ${fmt(Math.abs(raw.shares))} sh @ ${raw.ccy} ${raw.price.toFixed(3)}" style="color:var(--amber);margin-left:5px;cursor:help"></i>`
+      : '';
     return `<tr>
       <td style="white-space:nowrap;color:var(--text-secondary)">${dt}</td>
       <td><span class="type-pill ${pillCls[t.action]||'pill-buy'}">${t.action.toUpperCase()}</span></td>
-      <td>${symWithName(t.sym)}</td>
+      <td>${symWithName(t.sym)}${splitBadge}</td>
       <td style="color:var(--text-secondary)">${t.exch}</td>
       <td style="text-align:right">${fmt(Math.abs(t.shares))}</td>
       <td style="text-align:right">${t.price > 0 ? t.price.toFixed(3) : '—'}</td>
@@ -12687,7 +12740,13 @@ function _sdRefreshIfOpen(sym) {
 function _renderStockDetail(sym, exch) {
   const h        = portfolio.holdings[sym];
   const isClosed = !h;
-  const txns     = portfolio.transactions.filter(t => t.sym === sym && !t.isFee);
+  // Split/bonus/rights-adjusted (today's share-count terms) — matches
+  // Holdings, Realised P&L, and Transaction History, all of which run
+  // through applyCorpActions(). Necessary here too: the price chart below
+  // plots Yahoo's historical closes, which Yahoo itself already
+  // retroactively split-adjusts, so the buy/sell markers and FIFO lots must
+  // be in the same adjusted terms or they land at the wrong price/share level.
+  const txns = applyCorpActions(portfolio.transactions.filter(t => t.sym === sym && !t.isFee));
   if (!txns.length) return;
 
   const ccy      = txns[0].ccy;
