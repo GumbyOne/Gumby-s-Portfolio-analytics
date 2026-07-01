@@ -3,7 +3,8 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Portfolio Analytics</title>
+<title>Gumby Yik's PA</title>
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%231D9E75'/%3E%3Crect x='8' y='18' width='3.5' height='7' rx='1' fill='%23fff'/%3E%3Crect x='14.25' y='13' width='3.5' height='12' rx='1' fill='%23fff'/%3E%3Crect x='20.5' y='7' width='3.5' height='18' rx='1' fill='%23fff'/%3E%3C/svg%3E">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@2.44.0/tabler-icons.min.css">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns@3.0.0/dist/chartjs-adapter-date-fns.bundle.min.js"></script>
@@ -70,20 +71,20 @@
   .sidebar.expanded { width: 180px; align-items: flex-start; }
 
   /* Logo mark */
+  .sb-brand { display: flex; align-items: center; gap: 8px; margin-bottom: 14px; margin-left: 10px; }
+  .sidebar:not(.expanded) .sb-brand { margin-left: 0; }
   .sb-logo {
     width: 32px; height: 32px;
     background: var(--green);
     border-radius: 8px;
     display: flex; align-items: center; justify-content: center;
     flex-shrink: 0;
-    margin-bottom: 14px;
-    margin-left: 10px;
     cursor: pointer;
     transition: background 0.15s;
   }
   .sb-logo:hover { background: var(--green-dark); }
-  .sb-logo span { color: #fff; font-size: 12px; font-weight: 700; line-height: 1; }
-  .sidebar:not(.expanded) .sb-logo { margin-left: 0; }
+  .sb-brand-name { font-size: 13px; font-weight: 600; color: var(--text-primary); white-space: nowrap; opacity: 0; width: 0; overflow: hidden; transition: opacity 0.15s; }
+  .sidebar.expanded .sb-brand-name { opacity: 1; width: auto; }
 
   /* Nav items */
   .sb-nav { display: flex; flex-direction: column; gap: 1px; width: 100%; padding: 0 6px; flex: 1; }
@@ -640,8 +641,15 @@
 
   <!-- ── Sidebar ───────────────────────────────────────────────── -->
   <nav class="sidebar" id="sidebar" aria-label="Main navigation">
-    <div class="sb-logo" onclick="toggleSidebar()" title="Expand / collapse">
-      <span>PA</span>
+    <div class="sb-brand" onclick="toggleSidebar()" title="Gumby Yik's PA — Expand / collapse">
+      <div class="sb-logo">
+        <svg width="18" height="18" viewBox="0 0 32 32" aria-hidden="true">
+          <rect x="8" y="18" width="3.5" height="7" rx="1" fill="#fff"/>
+          <rect x="14.25" y="13" width="3.5" height="12" rx="1" fill="#fff"/>
+          <rect x="20.5" y="7" width="3.5" height="18" rx="1" fill="#fff"/>
+        </svg>
+      </div>
+      <span class="sb-brand-name">Gumby Yik's PA</span>
     </div>
     <div class="sb-nav">
       <div class="sb-item active" id="nav-dashboard"   onclick="switchTab('dashboard',this)"   title="Dashboard"><i class="ti ti-layout-dashboard" aria-hidden="true"></i><span class="sb-label">Dashboard</span></div>
@@ -1702,6 +1710,12 @@
 
     <!-- ALERTS -->
     <div id="tab-alerts" class="hidden">
+      <div class="chart-card hidden" id="data-integrity-card">
+        <div class="section-header">
+          <span class="section-title">Data integrity warnings</span>
+        </div>
+        <div id="data-integrity-list"></div>
+      </div>
       <div class="chart-card">
         <div class="section-header">
           <span class="section-title">Price alerts</span>
@@ -4055,6 +4069,19 @@ function buildNavSeries() {
   const lastKnown  = {}; // { sym: price } — last ACCEPTED price, used for NAV valuation
   const rejectedAnchor = {}; // { sym: price } — last REJECTED close, used only as
                               // tomorrow's comparison anchor (hysteresis; see below)
+  // Negative-cumShares tripwire (suggested 2026-06-29 after the NVDA-split
+  // NAV-zeroing bug, built 2026-07-01). A raw pre-split buy not yet covered
+  // by a Corp Actions entry can still drive cumShares[sym] negative even
+  // after the applyCorpActions() fix above — that fix only helps for
+  // corp actions that HAVE been entered; forgetting to log a new one
+  // reproduces the exact same failure mode. Previously this failed
+  // completely silently (the `cumShares[sym] < 0.001` skip-guard below
+  // just quietly zeroes the symbol out of NAV with no visible symptom).
+  // Tracks the worst (most negative) share count per symbol and the date
+  // it first went negative — surfaced on the Alerts tab and folded into
+  // the sidebar bell badge so it can't hide the way the original NVDA
+  // case did for weeks.
+  const negativeShareEvents = {}; // { sym: { firstDate, worstShares } }
   let di = 0;
   const sorted = [...txns];
 
@@ -4069,6 +4096,13 @@ function buildNavSeries() {
       cumShares[t.sym] += t.shares;
       lastKnown[t.sym]  = t.price;
       delete rejectedAnchor[t.sym]; // a real transaction price is authoritative — clear any pending rejection
+      if (cumShares[t.sym] < -0.001) {
+        if (!negativeShareEvents[t.sym]) {
+          negativeShareEvents[t.sym] = { firstDate: t.date, worstShares: cumShares[t.sym] };
+        } else if (cumShares[t.sym] < negativeShareEvents[t.sym].worstShares) {
+          negativeShareEvents[t.sym].worstShares = cumShares[t.sym];
+        }
+      }
       di++;
     }
 
@@ -4161,6 +4195,14 @@ function buildNavSeries() {
       txnDates.has(p.x.toISOString().slice(0,10))
     );
   }
+
+  // ── Negative-cumShares tripwire result ──────────────────────────────
+  // Recomputed fresh on every buildNavSeries() call (not accumulated across
+  // calls), so a warning clears itself automatically once the underlying
+  // Corp Actions entry is added and the position reconciles.
+  portfolio.negativeShareWarnings = Object.entries(negativeShareEvents)
+    .map(([sym, info]) => ({ sym, firstDate: info.firstDate, worstShares: info.worstShares }))
+    .sort((a, b) => a.worstShares - b.worstShares); // most negative first
 }
 
 // ════════════════════════════════════════════════════════════════════
@@ -4193,7 +4235,13 @@ function buildNavSeries() {
 // resting on stale prices" in SGD-days, not just day-counts.
 function computePriceCoverage() {
   const rawTxns = portfolio.transactions.filter(t => !t.isFee).sort((a,b) => a.date - b.date);
-  const txns = netSameDayTransactions(rawTxns).filter(t => !t.isFee);
+  const netted  = netSameDayTransactions(rawTxns).filter(t => !t.isFee);
+  // Same pipeline order as buildNavSeries() — a raw pre-split buy's share
+  // count would otherwise undercount shares actually held post-split,
+  // producing a wrong holding window and wrong coverage weighting for that
+  // symbol (originally identified as an open item 2026-06-30, fixed
+  // 2026-07-01 alongside the same bug in five other functions).
+  const txns = applyCorpActions(netted);
   if (!txns.length) return [];
 
   // Symbol metadata from ALL transactions (open + closed) — same rationale
@@ -6063,8 +6111,17 @@ function renderHoldings() {
   const pillClass = { stock:'pill-stock', etf:'pill-etf', reit:'pill-reit', bond:'pill-bond' };
   tbody.innerHTML = items.map(h => {
     const pc = h.pnl>=0?'up':'down';
-    const dayCls = h.eodDayChg === null ? '' : h.eodDayChg >= 0 ? 'up' : 'down';
-    const dayTxt = h.eodDayChg === null ? '—' : `${h.eodDayChg>=0?'+':''}${h.ccy} ${Math.abs(h.eodDayChg).toFixed(3)}`;
+    // Day change now shows VALUE change (shares × price move, FX-converted
+    // to SGD), not the raw per-share price move — matches what every other
+    // money column in this table is denominated in, and matches the
+    // convention already used by the Dashboard's aggregate Day change KPI
+    // (see updateKPIs(): toSGD(hd.shares * hd.eodDayChg, hd.ccy, hd.eodDate)).
+    // Previously showed e.g. "SGD 0.020" (a price tick) right next to a
+    // Value (SGD) column showing thousands — not comparable at a glance,
+    // and didn't reflect actual position size like every other $ column.
+    const dayChgValSGD = h.eodDayChg === null ? null : toSGD(h.shares * h.eodDayChg, h.ccy, h.eodDate);
+    const dayCls = dayChgValSGD === null ? '' : dayChgValSGD >= 0 ? 'up' : 'down';
+    const dayTxt = dayChgValSGD === null ? '—' : `${dayChgValSGD>=0?'+':'-'}S$${fmt(Math.abs(dayChgValSGD))}`;
     return `<tr>
       <td>${symWithName(h.sym)}</td>
       <td style="color:var(--text-secondary)">${h.exch}</td>
@@ -7145,6 +7202,14 @@ function getClosedPositionsSummary(sellRows) {
 // ccy directly rather than reading portfolio.holdings.
 function buildSymbolXirrCFs(sym, exch, ccy) {
   const flows = [];
+  // Corp-action-adjusted transactions for this symbol — used below for the
+  // dividend shares-held-before-exdate calc. A raw pre-split buy's share
+  // count would otherwise undercount shares actually held by a post-split
+  // ex-date if the symbol has any entry in the Corp Actions registry.
+  // (Not needed for the cash-flow loop just below: shares×price is
+  // invariant under applyCorpActions()'s split/bonus/rights adjustment by
+  // construction, so raw is fine there.)
+  const symTxnsAdj = applyCorpActions(portfolio.transactions.filter(t => !t.isFee && t.sym === sym));
   portfolio.transactions
     .filter(t => !t.isFee && t.sym === sym)
     .forEach(t => {
@@ -7161,8 +7226,7 @@ function buildSymbolXirrCFs(sym, exch, ccy) {
       const exStr = date.toISOString().slice(0,10);
       const dps   = divOverrideDps(divOverrideKey(sym, exStr)) ?? amount;
       let shares = 0;
-      portfolio.transactions
-        .filter(t => !t.isFee && t.sym === sym)
+      symTxnsAdj
         .forEach(t => {
           const tStr = (t.date instanceof Date ? t.date : new Date(t.date)).toISOString().slice(0,10);
           if (tStr < exStr) shares += t.shares;
@@ -8006,14 +8070,16 @@ function renderPerformance() {
       const ticker = getYahooTicker(hld.sym, hld.exch);
       const cached = ticker ? divCache[ticker] : null;
       if (!cached?.dividends?.length) return;
+      // Corp-action-adjusted transactions for this symbol — see
+      // buildSymbolXirrCFs() for why raw shares aren't safe to sum here.
+      const symTxnsAdj = applyCorpActions(portfolio.transactions.filter(t => !t.isFee && t.sym === hld.sym));
       cached.dividends.forEach(({ date, amount }) => {
         const exDateStr = date.toISOString().slice(0,10);
         const ovKey = divOverrideKey(hld.sym, exDateStr);
         const dps   = divOverrideDps(ovKey) ?? amount;
         // Shares held before ex-date
         let shares = 0;
-        portfolio.transactions
-          .filter(t => !t.isFee && t.sym === hld.sym)
+        symTxnsAdj
           .forEach(t => {
             const tStr = (t.date instanceof Date ? t.date : new Date(t.date)).toISOString().slice(0,10);
             if (tStr < exDateStr) shares += t.shares;
@@ -8820,6 +8886,9 @@ function buildPortfolioXirrCFs(fromDate, toDate, openingValueSGD) {
     const ticker = getYahooTicker(hld.sym, hld.exch);
     const cached = ticker ? divCache[ticker] : null;
     if (!cached?.dividends?.length) return;
+    // Corp-action-adjusted transactions for this symbol — see
+    // buildSymbolXirrCFs() for why raw shares aren't safe to sum here.
+    const symTxnsAdj = applyCorpActions(portfolio.transactions.filter(t => !t.isFee && t.sym === hld.sym));
     cached.dividends.forEach(({ date, amount }) => {
       if (from && date < from) return;
       if (date > now) return;
@@ -8827,8 +8896,7 @@ function buildPortfolioXirrCFs(fromDate, toDate, openingValueSGD) {
       const dps   = divOverrideDps(divOverrideKey(hld.sym, exStr)) ?? amount;
       // Shares held just before ex-date
       let shares = 0;
-      portfolio.transactions
-        .filter(t => !t.isFee && t.sym === hld.sym)
+      symTxnsAdj
         .forEach(t => {
           const tStr = (t.date instanceof Date ? t.date : new Date(t.date)).toISOString().slice(0,10);
           if (tStr < exStr) shares += t.shares;
@@ -9054,13 +9122,15 @@ function renderAnnualTwrTable(cumDivMap) {
       const ticker = getYahooTicker(hld.sym, hld.exch);
       const cached = ticker ? divCache[ticker] : null;
       if (!cached?.dividends?.length) return;
+      // Corp-action-adjusted transactions for this symbol — see
+      // buildSymbolXirrCFs() for why raw shares aren't safe to sum here.
+      const symTxnsAdj = applyCorpActions(portfolio.transactions.filter(t => !t.isFee && t.sym === hld.sym));
       cached.dividends.forEach(({ date, amount }) => {
         const dStr = date.toISOString().slice(0,10);
         if (dStr <= effectiveStartStr || dStr > yearEndStr) return;
         const dps = divOverrideDps(divOverrideKey(hld.sym, dStr)) ?? amount;
         let shares = 0;
-        portfolio.transactions
-          .filter(t => !t.isFee && t.sym === hld.sym)
+        symTxnsAdj
           .forEach(t => {
             const tStr = (t.date instanceof Date ? t.date : new Date(t.date)).toISOString().slice(0,10);
             if (tStr < dStr) shares += t.shares;
@@ -10368,23 +10438,32 @@ function submitManualEntry() {
 // past as of 2026-06-27), still passed the abs()-based window and kept
 // showing in both Upcoming cards as if still owed, when it had already
 // been paid. A dividend with a KNOWN real pay date in the past is never
-// "upcoming" — full stop, no grace period in that direction.
+// "upcoming" — full stop, no grace period in that direction. That claim
+// was only half-true until 2026-07-01: PAY_DATE_BACKWARD_GRACE_DAYS was
+// still set to 2 (not 0), so a dividend paid up to 2 days ago still
+// passed the check — confirmed live on Y03: pay date 2026-06-30, still
+// showing on both Upcoming cards on 2026-07-01 (~1.2 days after payment).
+// Now genuinely 0 — a known real pay date in the past excludes immediately.
 // The ex-date-only case still allows a SMALL backward grace window
-// (EX_DATE_ONLY_BACKWARD_GRACE_DAYS) because without a real pay date we
-// genuinely don't know if it's been paid yet — Y03's case: ex-date alone
-// was 47 days in the past, dividend was almost certainly already paid by
-// the time it was shown, which is a known, accepted imprecision of this
-// fallback (documented in the original Y03 fix) — but that grace window
-// is intentionally much smaller than the full forward window, and never
-// applies once we have an actual confirmed pay date.
+// (YAHOO_FALLBACK_EX_DATE_BACKWARD_GRACE_DAYS) because without a real pay
+// date we genuinely don't know if it's been paid yet. This was previously
+// set to 60 days — accidentally equal to the forward window, rather than
+// "much smaller" as this comment always claimed — which let entries like
+// Y03 and O9P (no confirmed pay date) keep showing on both Upcoming cards
+// for up to 60 days after their ex-date had already passed, almost
+// certainly long after actually being paid (fixed 2026-06-30). Now a real
+// short grace period: long enough to still catch an entry that only just
+// went ex and hasn't been picked up by dividends.sg yet, short enough that
+// it drops off once it's clearly stale. Never applies once we have an
+// actual confirmed pay date (see the PAY_DATE_BACKWARD_GRACE_DAYS branch).
 //
 // Only returns symbols NOT already present in announcedDivCache (any
 // source) — dividends.sg/manual entries always take priority when they
 // exist, since they're more reliable for pay-date and DPS precision.
 const YAHOO_FALLBACK_PAY_DATE_FORWARD_WINDOW_DAYS  = 14;
-const YAHOO_FALLBACK_PAY_DATE_BACKWARD_GRACE_DAYS  = 2;
+const YAHOO_FALLBACK_PAY_DATE_BACKWARD_GRACE_DAYS  = 0;
 const YAHOO_FALLBACK_EX_DATE_FORWARD_WINDOW_DAYS   = 60;
-const YAHOO_FALLBACK_EX_DATE_BACKWARD_GRACE_DAYS   = 60;
+const YAHOO_FALLBACK_EX_DATE_BACKWARD_GRACE_DAYS   = 7;
 function getYahooFallbackUpcomingDivs() {
   const now = new Date();
   const out = [];
@@ -10403,11 +10482,21 @@ function getYahooFallbackUpcomingDivs() {
     if (!latest) return;
 
     const exDate = latest.date;
-    // sgxPayDateCache may have a real pay date even when announcedDivCache
-    // doesn't (the two caches are populated independently — see parseViewPage).
-    const exDateStr  = exDate.toISOString().slice(0, 10);
-    const sgxPayStr  = sgxPayDateCache[hld.sym]?.[exDateStr];
-    const payDate    = sgxPayStr ? new Date(sgxPayStr) : null;
+    // Prefer a pay date embedded directly in Yahoo's own dividend event
+    // payload when present — this can be more current than sgxPayDateCache,
+    // which only gets populated by scraping dividends.sg's /view/{sym} page
+    // and can lag behind what Yahoo already knows. Confirmed live 2026-07-01
+    // on O9P: its newest dividend (ex 2026-06-02) already carried its own
+    // payDate of 2026-06-30 straight from Yahoo, but sgxPayDateCache's
+    // newest key for O9P was still stuck at 2026-03-02 — ignoring the
+    // embedded field anchored the window on the stale ex-date instead of
+    // the real (already-passed) pay date, so it kept showing as "upcoming"
+    // under the ex-date-only branch's wider grace window. Falls back to
+    // sgxPayDateCache, then to ex-date-only, in that order of preference.
+    const exDateStr    = exDate.toISOString().slice(0, 10);
+    const sgxPayStr    = sgxPayDateCache[hld.sym]?.[exDateStr];
+    const yahooPayDate = latest.payDate ? (latest.payDate instanceof Date ? latest.payDate : new Date(latest.payDate)) : null;
+    const payDate       = yahooPayDate || (sgxPayStr ? new Date(sgxPayStr) : null);
     const anchorDate = payDate || exDate; // what we judge "recent/soon" against
     const diffMs     = anchorDate - now;  // POSITIVE = still in the future, NEGATIVE = already passed
     const forwardMs  = (payDate ? YAHOO_FALLBACK_PAY_DATE_FORWARD_WINDOW_DAYS  : YAHOO_FALLBACK_EX_DATE_FORWARD_WINDOW_DAYS)  * 86400000;
@@ -11255,6 +11344,12 @@ function renderDividends() {
     if (!cached || !cached.dividends.length) return;
     hasDivData.push(hld.sym);
 
+    // Corp-action-adjusted transactions for this symbol — see
+    // buildSymbolXirrCFs() for why raw shares aren't safe to sum here.
+    // Feeds the actual dividend income totals shown on this tab, so this
+    // one matters more than the diagnostic-only spots.
+    const symTxnsAdj = applyCorpActions(portfolio.transactions.filter(t => !t.isFee && t.sym === hld.sym));
+
     cached.dividends.forEach(({ date, amount, payDate }) => {
       // Skip dividends whose ex-date is in the future — Yahoo sometimes includes
       // upcoming confirmed ex-dates in its events payload; those are projections,
@@ -11265,8 +11360,7 @@ function renderDividends() {
       // Compare as ISO date strings (YYYY-MM-DD) to avoid any timezone drift
       const exDateStr = date.toISOString().slice(0, 10);
       let sharesOnDate = 0;
-      portfolio.transactions
-        .filter(t => !t.isFee && t.sym === hld.sym)
+      symTxnsAdj
         .forEach(t => {
           const tDateStr = (t.date instanceof Date ? t.date : new Date(t.date)).toISOString().slice(0, 10);
           if (tDateStr < exDateStr) sharesOnDate += t.shares;
@@ -12072,16 +12166,55 @@ function deleteTransaction(idx) {
 }
 
 // ─── ALERTS (NEW) ─────────────────────────────────────────────────────
+function renderDataIntegrityWarnings() {
+  const card = document.getElementById('data-integrity-card');
+  const el   = document.getElementById('data-integrity-list');
+  if (!card || !el) return;
+  const warnings = portfolio.negativeShareWarnings || [];
+  if (!warnings.length) { card.classList.add('hidden'); return; }
+  card.classList.remove('hidden');
+  el.innerHTML = warnings.map(w => `<div class="alert-item" style="border-left:3px solid var(--red)">
+    <div class="alert-dot dot-triggered"></div>
+    <span style="font-weight:500;min-width:60px">${symWithName(w.sym)}</span>
+    <span style="color:var(--text-secondary);flex:1">cumulative share count went negative (${w.worstShares.toFixed(2)}) starting ${w.firstDate.toISOString().slice(0,10)} — likely a missing Corp Actions entry (split/bonus/rights) for this symbol</span>
+    <button class="btn-secondary" style="padding:3px 10px;font-size:11px" onclick="switchTab('corpactions')">Fix in Corp Actions</button>
+  </div>`).join('');
+}
+
+function updateAlertBadge(triggeredCount, dataIntegrityCount) {
+  const badge = document.getElementById('alert-count-badge');
+  if (!badge) return;
+  const total = triggeredCount + dataIntegrityCount;
+  if (total > 0) {
+    badge.textContent = total;
+    badge.classList.remove('hidden');
+    badge.title = [
+      triggeredCount     ? `${triggeredCount} price alert${triggeredCount>1?'s':''} triggered` : null,
+      dataIntegrityCount ? `${dataIntegrityCount} data integrity warning${dataIntegrityCount>1?'s':''}` : null
+    ].filter(Boolean).join(' · ');
+  } else {
+    badge.classList.add('hidden');
+    badge.title = '';
+  }
+}
+
 function renderAlerts() {
   // Populate symbol select
   const syms = Object.keys(portfolio.holdings).sort();
   const sel = document.getElementById('a-symbol');
   sel.innerHTML = '<option value="">— select —</option>' + syms.map(s=>`<option value="${s}">${s}</option>`).join('');
 
+  // Data integrity warnings render independently of price alerts below —
+  // must happen before the early return so a negative-cumShares warning
+  // still shows (and still contributes to the badge) even with zero price
+  // alerts set.
+  renderDataIntegrityWarnings();
+  const dataIntegrityCount = (portfolio.negativeShareWarnings || []).length;
+
   const list = document.getElementById('alerts-list');
   if (!alerts.length) {
     list.innerHTML = `<div class="empty-state"><i class="ti ti-bell-off"></i><p>No alerts set. Add a price alert to get notified when a position hits a target price.</p><button class="btn-primary" onclick="openAddAlert()"><i class="ti ti-bell-plus"></i> Add alert</button></div>`;
-    document.getElementById('alert-count-badge').classList.add('hidden');
+    updateAlertBadge(0, dataIntegrityCount);
     destroyChart('alertsChart');
     return;
   }
@@ -12094,10 +12227,7 @@ function renderAlerts() {
     a.triggered = a.dir==='above' ? h.curPrice >= a.target : h.curPrice <= a.target;
     if (a.triggered) triggered++;
   });
-  if (triggered > 0) {
-    document.getElementById('alert-count-badge').textContent = triggered;
-    document.getElementById('alert-count-badge').classList.remove('hidden');
-  } else { document.getElementById('alert-count-badge').classList.add('hidden'); }
+  updateAlertBadge(triggered, dataIntegrityCount);
 
   list.innerHTML = alerts.map((a,i) => {
     const h = portfolio.holdings[a.sym];
