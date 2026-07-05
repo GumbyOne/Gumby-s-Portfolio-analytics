@@ -3,7 +3,8 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Portfolio Analytics</title>
+<title>Gumby Yik's PA</title>
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%231D9E75'/%3E%3Crect x='8' y='18' width='3.5' height='7' rx='1' fill='%23fff'/%3E%3Crect x='14.25' y='13' width='3.5' height='12' rx='1' fill='%23fff'/%3E%3Crect x='20.5' y='7' width='3.5' height='18' rx='1' fill='%23fff'/%3E%3C/svg%3E">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@2.44.0/tabler-icons.min.css">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns@3.0.0/dist/chartjs-adapter-date-fns.bundle.min.js"></script>
@@ -70,20 +71,20 @@
   .sidebar.expanded { width: 180px; align-items: flex-start; }
 
   /* Logo mark */
+  .sb-brand { display: flex; align-items: center; gap: 8px; margin-bottom: 14px; margin-left: 10px; }
+  .sidebar:not(.expanded) .sb-brand { margin-left: 0; }
   .sb-logo {
     width: 32px; height: 32px;
     background: var(--green);
     border-radius: 8px;
     display: flex; align-items: center; justify-content: center;
     flex-shrink: 0;
-    margin-bottom: 14px;
-    margin-left: 10px;
     cursor: pointer;
     transition: background 0.15s;
   }
   .sb-logo:hover { background: var(--green-dark); }
-  .sb-logo span { color: #fff; font-size: 12px; font-weight: 700; line-height: 1; }
-  .sidebar:not(.expanded) .sb-logo { margin-left: 0; }
+  .sb-brand-name { font-size: 13px; font-weight: 600; color: var(--text-primary); white-space: nowrap; opacity: 0; width: 0; overflow: hidden; transition: opacity 0.15s; }
+  .sidebar.expanded .sb-brand-name { opacity: 1; width: auto; }
 
   /* Nav items */
   .sb-nav { display: flex; flex-direction: column; gap: 1px; width: 100%; padding: 0 6px; flex: 1; }
@@ -640,8 +641,15 @@
 
   <!-- ── Sidebar ───────────────────────────────────────────────── -->
   <nav class="sidebar" id="sidebar" aria-label="Main navigation">
-    <div class="sb-logo" onclick="toggleSidebar()" title="Expand / collapse">
-      <span>PA</span>
+    <div class="sb-brand" onclick="toggleSidebar()" title="Gumby Yik's PA — Expand / collapse">
+      <div class="sb-logo">
+        <svg width="18" height="18" viewBox="0 0 32 32" aria-hidden="true">
+          <rect x="8" y="18" width="3.5" height="7" rx="1" fill="#fff"/>
+          <rect x="14.25" y="13" width="3.5" height="12" rx="1" fill="#fff"/>
+          <rect x="20.5" y="7" width="3.5" height="18" rx="1" fill="#fff"/>
+        </svg>
+      </div>
+      <span class="sb-brand-name">Gumby Yik's PA</span>
     </div>
     <div class="sb-nav">
       <div class="sb-item active" id="nav-dashboard"   onclick="switchTab('dashboard',this)"   title="Dashboard"><i class="ti ti-layout-dashboard" aria-hidden="true"></i><span class="sb-label">Dashboard</span></div>
@@ -699,9 +707,11 @@
           <button class="btn-secondary" onclick="openTickerModal()" id="btn-tickers" style="display:none" title="Review auto-mapped Yahoo tickers"><i class="ti ti-tag"></i><span> Tickers</span></button>
           <button class="btn-secondary" onclick="refetchPrices()" id="btn-refetch" style="display:none" title="Re-fetch closing prices"><i class="ti ti-refresh"></i><span> Refresh</span></button>
           <button class="btn-secondary" onclick="exportCSV()" id="btn-export" style="display:none"><i class="ti ti-download"></i><span> Export</span></button>
+          <button class="btn-secondary" onclick="openModal('full-backup-modal')" id="btn-full-backup" style="display:none" title="Back up everything — corp actions, price overrides, dividend data, and more"><i class="ti ti-database-export"></i><span> Backup</span></button>
           <button class="btn-secondary" onclick="window.print()" title="Print"><i class="ti ti-printer"></i></button>
           <button class="btn-secondary" onclick="loadDemo()"><i class="ti ti-test-pipe"></i><span> Demo</span></button>
           <label class="btn-primary" style="cursor:pointer"><i class="ti ti-upload"></i><span> Import CSV</span><input type="file" accept=".csv,.tsv" style="display:none" onchange="handleFile(this)"></label>
+          <label class="btn-secondary" style="cursor:pointer" title="Restore corp actions, price overrides, dividend data, and portfolios from a full backup file"><i class="ti ti-database-import"></i><span> Restore</span><input type="file" accept=".json" style="display:none" onchange="importFullBackup(this)"></label>
         </div>
       </div>
       <div class="pf-bar" id="pf-bar"></div>
@@ -710,7 +720,7 @@
     <div id="backup-reminder-banner" class="hidden" style="display:flex;align-items:center;justify-content:space-between;gap:12px;padding:10px 20px;background:var(--amber-bg);color:var(--amber);border-bottom:1px solid var(--border);font-size:13px;">
       <span><i class="ti ti-clock-exclamation" style="margin-right:6px"></i><span id="backup-reminder-text">It's been a while since your last backup.</span></span>
       <div style="display:flex;gap:8px;flex-shrink:0">
-        <button class="btn-primary" style="padding:5px 12px;font-size:12px" onclick="exportCSV(); dismissBackupReminder();">Export now</button>
+        <button class="btn-primary" style="padding:5px 12px;font-size:12px" onclick="openModal('full-backup-modal'); dismissBackupReminder();">Back up now</button>
         <button class="btn-secondary" style="padding:5px 12px;font-size:12px" onclick="dismissBackupReminder()">Remind me later</button>
       </div>
     </div>
@@ -1702,6 +1712,12 @@
 
     <!-- ALERTS -->
     <div id="tab-alerts" class="hidden">
+      <div class="chart-card hidden" id="data-integrity-card">
+        <div class="section-header">
+          <span class="section-title">Data integrity warnings</span>
+        </div>
+        <div id="data-integrity-list"></div>
+      </div>
       <div class="chart-card">
         <div class="section-header">
           <span class="section-title">Price alerts</span>
@@ -1738,6 +1754,10 @@
           </div>
           <button class="btn-primary" onclick="event.stopPropagation();document.getElementById('csv-input').click()"><i class="ti ti-upload"></i> Browse file</button>
           <button class="btn-secondary" onclick="event.stopPropagation();loadDemo()"><i class="ti ti-test-pipe"></i> Load demo data</button>
+          <label class="btn-secondary" style="cursor:pointer" onclick="event.stopPropagation()" title="Restore corp actions, price overrides, dividend data, and portfolios from a full backup file">
+            <i class="ti ti-database-import"></i> Restore from backup
+            <input type="file" accept=".json" style="display:none" onchange="event.stopPropagation();importFullBackup(this)">
+          </label>
         </div>
       </div>
       <div class="format-hint">
@@ -1751,6 +1771,18 @@
         <strong>Keyboard shortcuts:</strong> <kbd>D</kbd> Dashboard &nbsp; <kbd>H</kbd> Holdings &nbsp; <kbd>T</kbd> Transactions &nbsp; <kbd>A</kbd> Alerts &nbsp; <kbd>?</kbd> Help
       </div>
       <div id="parse-status" style="margin-top:12px"></div>
+
+      <!-- Backup folder — File System Access API (Chrome/Edge/Opera only, see
+           the note rendered into #backup-folder-setting for unsupported
+           browsers). Lets Backup/Restore write to and read from a chosen
+           folder directly instead of always going through the browser's
+           default Downloads folder and a manual file picker. -->
+      <div class="chart-card" style="margin-top:12px">
+        <div class="chart-title">Backup folder
+          <span class="chart-title-sub">optional — where full backups (corp actions, price overrides, dividend data, etc.) are saved and restored from</span>
+        </div>
+        <div id="backup-folder-setting"></div>
+      </div>
 
       <!-- Dividend declarations & corrections — duplicated here from the Dividends tab
            so backup/restore is reachable without the long scroll down that tab. Both
@@ -1822,6 +1854,23 @@
           </div>
           <button class="btn-primary" onclick="submitStaticPriceOverride()" style="padding:6px 14px;font-size:12px;height:32px">Save override</button>
         </div>
+      </div>
+
+      <!-- FX rate diagnostics — surfaces the same live/cached/fallback state
+           that used to require opening DevTools console. Added after
+           confirming (2026-07-04) that a single failed Yahoo/corsproxy fetch
+           for one currency used to collapse ALL of that currency's
+           historical FX conversions to one flat static rate for the whole
+           portfolio history, causing the Realised tab's "Total realised
+           return" to read differently between reloads. The localStorage
+           cache fallback (fxHistoryCache) fixed the silent flip-flop; this
+           panel makes that state visible without needing the console. -->
+      <div class="chart-card" style="margin-top:12px">
+        <div class="chart-title">FX rate diagnostics
+          <span class="chart-title-sub">live / cached / fallback status per currency — explains why FX-converted figures (Realised P&amp;L, Exposure) might shift between sessions</span>
+          <button class="btn-secondary" onclick="renderFxDiagnostics()" style="font-size:11px;padding:3px 10px"><i class="ti ti-refresh" style="font-size:11px"></i> Refresh</button>
+        </div>
+        <div id="fx-diagnostics-list"></div>
       </div>
     </div>
 
@@ -2232,7 +2281,7 @@ function switchTab(id, el) {
   // Update page title
   const titleEl = document.getElementById('page-title');
   if (titleEl) titleEl.textContent = PAGE_TITLES[id] || id;
-  if (id === 'import') { refreshImportPfSelect(); renderStaticPriceList(); renderClassificationEditor(); renderTagsEditor(); }
+  if (id === 'import') { refreshImportPfSelect(); renderStaticPriceList(); renderClassificationEditor(); renderTagsEditor(); renderFxDiagnostics(); }
 }
 
 // ─── SIDEBAR EXPAND / COLLAPSE ────────────────────────────────────────
@@ -2513,7 +2562,7 @@ function parseCSV(text, filename) {
   renderPfBar();
   processPortfolio();
   switchTab('dashboard', 'dashboard');
-  document.getElementById('btn-export').style.display = '';
+  document.getElementById('btn-export').style.display = ''; document.getElementById('btn-full-backup').style.display = '';
 }
 
 function showStatus(type, msg) {
@@ -2728,6 +2777,159 @@ const FX_FALLBACK = { SGD:1, USD:1.35, HKD:0.173, GBP:1.7, JPY:0.009, AUD:0.88, 
 
 // Historical FX rate maps: { 'USD': Map<dateStr, rate> }
 let fxHistory = {};
+
+// ── FX HISTORY CACHE (localStorage) ──────────────────────────────────
+// fxHistory above is always rebuilt fresh from Yahoo on every page load —
+// it is never itself persisted. Previously, if a single currency's Yahoo/
+// corsproxy fetch failed for any reason (network blip, rate limit, the
+// documented corsproxy flakiness), that currency's fxHistory[ccy] became an
+// EMPTY Map, which made getFxRate() fall back to ONE flat static number
+// (FX_FALLBACK) for every historical date of that currency — silently
+// swapping 17 years of date-accurate FX conversions for a flat guess, then
+// swapping back the next time the fetch happened to succeed. This was
+// confirmed as the cause of the Realised tab's "Total realised return"
+// reading differently between reloads (2026-07-04 diagnosis).
+// Fix: persist the last successfully-fetched rate map per currency here.
+// When a live fetch fails, fall back to this cached (still date-specific,
+// just possibly a session or two stale) map instead of the flat static rate.
+// fxHistoryFromCache tracks which currencies used the cache fallback THIS
+// session, purely so the UI's "live"/"est" FX badges can show a distinct
+// "cached" state instead of claiming a stale fallback is live.
+const FX_HISTORY_CACHE_KEY = 'fxHistoryCache';
+let fxHistoryFromCache = new Set();
+function loadFxHistoryCache() {
+  try {
+    const raw = JSON.parse(localStorage.getItem(FX_HISTORY_CACHE_KEY) || '{}');
+    const out = {};
+    Object.keys(raw).forEach(ccy => { out[ccy] = new Map(raw[ccy]); });
+    return out;
+  } catch { return {}; }
+}
+function saveFxHistoryCache(fxHist) {
+  // Merge into existing storage rather than overwrite wholesale, so a
+  // currency that failed to fetch THIS session doesn't lose its last-good
+  // cached history just because other currencies fetched fine.
+  try {
+    const raw = JSON.parse(localStorage.getItem(FX_HISTORY_CACHE_KEY) || '{}');
+    Object.keys(fxHist).forEach(ccy => {
+      if (fxHist[ccy]?.size > 0) raw[ccy] = [...fxHist[ccy].entries()];
+    });
+    localStorage.setItem(FX_HISTORY_CACHE_KEY, JSON.stringify(raw));
+  } catch(e) {}
+}
+// ── PRICE HISTORY CACHE (localStorage) ─────────────────────────────────
+// Mirrors FX_HISTORY_CACHE_KEY above, for the same reason: a live Yahoo
+// fetch can fail for an equity ticker exactly as easily as for an FX pair
+// (documented corsproxy flakiness, Yahoo 429s — see CORS_PROXIES above,
+// which already gives every fetch two independent proxy attempts before
+// reaching here). Previously, once every proxy failed for a ticker, the
+// app fell straight through to that holding's last TRANSACTION price —
+// one static number frozen at whatever was last paid, however many years
+// ago — the exact same shape of staleness FX_HISTORY_CACHE_KEY fixed for
+// FX rates. This closes the equivalent gap for equity/ETF/REIT prices.
+//
+// Fix: persist the last successfully-fetched price series (+ dividends,
+// since Yahoo returns both in one call) per ticker here. When both
+// proxies fail, fall back to this cached (still date-specific, just
+// possibly a session or two stale) series instead of collapsing to a
+// flat last-transaction-price.
+// priceHistoryFromCache tracks which tickers used the cache fallback THIS
+// session, purely so the Tickers modal / fetch summary can show a
+// distinct "cached" state instead of claiming a stale fallback is live.
+//
+// Compact encoding: dates stored as YYYYMMDD integers and parallel arrays
+// (d[]/c[]) rather than an array of {date,close} objects — this roughly
+// halves JSON size for ~50 tickers x many years of daily closes, which
+// otherwise pushes uncomfortably close to the ~5MB localStorage quota
+// shared with fxHistoryCache, savedCorrections, pfRegistry, etc.
+const PRICE_HISTORY_CACHE_KEY = 'priceHistoryCache';
+let priceHistoryFromCache = new Set();
+
+function dateToYmd(d) { // Date -> YYYYMMDD integer (UTC)
+  return d.getUTCFullYear() * 10000 + (d.getUTCMonth() + 1) * 100 + d.getUTCDate();
+}
+function ymdToDate(n) { // YYYYMMDD integer -> Date (UTC midnight)
+  const y = Math.floor(n / 10000), m = Math.floor(n / 100) % 100, day = n % 100;
+  return new Date(Date.UTC(y, m - 1, day));
+}
+
+function loadPriceHistoryCache() {
+  try {
+    return JSON.parse(localStorage.getItem(PRICE_HISTORY_CACHE_KEY) || '{}');
+  } catch { return {}; }
+}
+
+// Merge-save: only overwrite a ticker's entry when we have fresh data for
+// it THIS session. A ticker that failed to fetch this session (proxies
+// down, temporarily delisted, whatever) must not lose its last-good
+// cached history just because other tickers fetched fine — same
+// rationale as saveFxHistoryCache() above.
+// Wrapped defensively: if the browser's localStorage quota is exceeded,
+// we log it and move on rather than let a storage failure break the
+// render pipeline — this session's live/session-memory data is
+// unaffected either way, only the persisted cache-for-next-time is lost.
+function savePriceHistoryCache(updates) {
+  try {
+    const raw = JSON.parse(localStorage.getItem(PRICE_HISTORY_CACHE_KEY) || '{}');
+    Object.keys(updates).forEach(ticker => {
+      const u = updates[ticker];
+      if (u && u.d && u.d.length) raw[ticker] = u;
+    });
+    const json = JSON.stringify(raw);
+    localStorage.setItem(PRICE_HISTORY_CACHE_KEY, json);
+    console.log(`[priceCache] priceHistoryCache saved — ${Object.keys(raw).length} tickers, ${(json.length/1024).toFixed(0)}KB in localStorage`);
+  } catch(e) {
+    console.warn(`[priceCache] Failed to save priceHistoryCache (${e.name}: ${e.message}) — this session's live data is unaffected; only the persisted cache-for-next-time was skipped.`);
+  }
+}
+
+// ── Price-history downsampling (applied before every cache write) ─────
+// priceHistoryCache is a last-resort fallback, read only when BOTH
+// CORS_PROXIES fail for a ticker (see fetchAllPrices) — never touched on
+// a normal day when Yahoo is reachable. Storing full daily resolution for
+// ~17 years x ~50 tickers measured at ~2.9MB in real use (2026-07-05
+// diagnostic session against the live 626-txn portfolio), which combined
+// with fxHistoryCache and other keys left as little as ~1MB of headroom
+// against this browser's confirmed real-world ~5MB localStorage quota
+// (measured directly — see console quota test from that session).
+//
+// Fix: keep full daily resolution for the RECENT window (where a fallback
+// is most likely to matter and where precision matters most for current
+// valuation), and coarsen anything older to roughly weekly (keep ~1 in 5
+// trading days). Every consumer that reads cached data (buildNavSeries,
+// computePriceCoverage, etc.) already carries the last-known price
+// forward over any gap in its date map — the same mechanism that already
+// absorbs weekends/holidays — so a sparser old-history map degrades into
+// a few more carry-forward days rather than breaking anything. Dividends
+// are NOT downsampled here (a handful of entries a year — negligible
+// size either way, and precision there matters for computeDividendsSplit).
+const PRICE_CACHE_FULL_RES_DAYS = 730; // ~2 years kept at full daily resolution
+
+function compactPriceSeries(dates, closes) {
+  if (dates.length <= PRICE_CACHE_FULL_RES_DAYS) {
+    return { dates, closes }; // short series — nothing to gain by coarsening
+  }
+  const cutoff = new Date(Date.now() - PRICE_CACHE_FULL_RES_DAYS * 86400000);
+  let splitIdx = dates.findIndex(d => d >= cutoff);
+  if (splitIdx === -1) splitIdx = dates.length; // defensive — shouldn't happen given the length check above
+  const outDates = [], outCloses = [];
+  // Old portion: ~1-in-5 trading days (~weekly). Always keep the series'
+  // very first entry and the entry right at the old/recent boundary, so
+  // neither the start of history nor the seam shows an oversized gap.
+  for (let i = 0; i < splitIdx; i++) {
+    if (i === 0 || i === splitIdx - 1 || i % 5 === 0) {
+      outDates.push(dates[i]);
+      outCloses.push(closes[i]);
+    }
+  }
+  // Recent portion: untouched, full daily resolution.
+  for (let i = splitIdx; i < dates.length; i++) {
+    outDates.push(dates[i]);
+    outCloses.push(closes[i]);
+  }
+  return { dates: outDates, closes: outCloses };
+}
+
 
 // Currencies to fetch historical rates for (vs SGD)
 const FX_PAIRS = {
@@ -3284,6 +3486,7 @@ function processPortfolio(skipFetch = false) {
   // Refresh classification/tags editors if Import tab is open
   if (typeof renderClassificationEditor === 'function') safeRender(renderClassificationEditor, 'renderClassificationEditor');
   if (typeof renderTagsEditor === 'function') safeRender(renderTagsEditor, 'renderTagsEditor');
+  if (typeof renderFxDiagnostics === 'function') safeRender(renderFxDiagnostics, 'renderFxDiagnostics');
   // Wire symbol clicks after all tables are rendered
   setTimeout(wireSymbolClicks, 0);
 
@@ -3308,9 +3511,36 @@ function processPortfolio(skipFetch = false) {
 }
 
 // ─── YAHOO FINANCE PRICE FETCH ────────────────────────────────────────
-// ── Yahoo Finance via corsproxy.io ───────────────────────────────────
-// query1/query2.finance.yahoo.com must be whitelisted in any AV software
+// ── Yahoo Finance via corsproxy.io, with two further proxy fallbacks ──
+// query1/query2.finance.yahoo.com must be whitelisted in any AV software,
+// as must ALL THREE proxy domains below (corsproxy.io, api.allorigins.win,
+// api.codetabs.com) — each needs the same whitelisting treatment.
 // No API key required
+//
+// CORS_PROXIES — tried in order until one succeeds. All three wrap the
+// IDENTICAL Yahoo URL below — this is transport redundancy only, not a
+// second data source:
+//   1. corsproxy.io — primary. Its free tier is origin-allowlisted
+//      (localhost, github.io, and a handful of other dev platforms — see
+//      https://corsproxy.io/pricing/), which covers both this app's local
+//      dev origin AND the GitHub Pages deployment, but would NOT cover an
+//      arbitrary self-hosted domain if this is ever open-sourced.
+//   2. api.allorigins.win — second, independent proxy. Documented as
+//      intermittently missing its own CORS header on a meaningful fraction
+//      of requests (see https://github.com/gnuns/allOrigins/issues/135) —
+//      a real, known reliability gap, not specific to this app.
+//   3. api.codetabs.com — third, independent proxy. No origin restriction,
+//      but rate-limited to ~5 req/sec and 5MB per response — comfortably
+//      enough for a single ticker's daily-close history, but worth knowing
+//      if it ever becomes the primary proxy under sustained heavy fallback.
+// A ticker is only marked failed for the session once ALL THREE proxies
+// have failed. See PRICE_HISTORY_CACHE_KEY below for the next fallback
+// tier (last-known-good data from localStorage), used only at that point.
+const CORS_PROXIES = [
+  url => `https://corsproxy.io/?${encodeURIComponent(url)}`,
+  url => `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`,
+  url => `https://api.codetabs.com/v1/proxy/?quest=${encodeURIComponent(url)}`,
+];
 
 function toAVTicker(t) { return t; } // passthrough — kept so rest of code unchanged
 let AV_API_KEY = 'n/a'; // not used but referenced elsewhere
@@ -3325,14 +3555,27 @@ async function fetchPricesForTicker(ticker, fromDate) {
   // broker statements. The Yahoo Finance history *web page* shows adjclose by default,
   // which is why it may show a different figure (e.g. $63.31 adj vs $64.31 raw).
   const yahooUrl = `https://query1.finance.yahoo.com/v8/finance/chart/${ticker}?period1=${period1}&period2=${period2}&interval=1d&events=div%7Chistory&includeAdjustedClose=true`;
-  const proxyUrl = `https://corsproxy.io/?${encodeURIComponent(yahooUrl)}`;
+
+  // Try each proxy in turn. A proxy "fails" on a network-level throw or a
+  // non-ok HTTP status (including 429) — either way we move to the next
+  // proxy immediately rather than giving up on Yahoo after a single bad hop.
+  let res = null, lastStatus = null;
+  for (let i = 0; i < CORS_PROXIES.length; i++) {
+    try {
+      const attempt = await fetch(CORS_PROXIES[i](yahooUrl));
+      if (attempt.ok) { res = attempt; if (i > 0) console.log(`[prices] ${ticker} — recovered via proxy ${i+1}/${CORS_PROXIES.length} (earlier proxy failed)`); break; }
+      lastStatus = attempt.status;
+      console.warn(`[prices] ${ticker} — proxy ${i+1}/${CORS_PROXIES.length} HTTP ${attempt.status}`);
+    } catch(e) {
+      console.warn(`[prices] ${ticker} — proxy ${i+1}/${CORS_PROXIES.length} network error (${e.message})`);
+    }
+  }
+  if (!res) {
+    console.warn(`[prices] ${ticker} — all ${CORS_PROXIES.length} proxies failed`);
+    return { dates:[], closes:[], currency:'', ok:false, status:lastStatus };
+  }
 
   try {
-    const res = await fetch(proxyUrl);
-    if (!res.ok) {
-      console.warn(`[prices] ${ticker} — HTTP ${res.status}`);
-      return { dates:[], closes:[], currency:'', ok:false, status:res.status };
-    }
     const json = await res.json();
     const result = json?.chart?.result?.[0];
     if (!result) {
@@ -3470,6 +3713,7 @@ const fetchYahoo = fetchPricesForTicker;
 // ── Historical FX rate fetcher ────────────────────────────────────────
 async function fetchFxHistory(fromDate) {
   const currencies = Object.keys(FX_PAIRS);
+  const cache = loadFxHistoryCache();
   await Promise.all(currencies.map(async (ccy) => {
     const ticker = FX_PAIRS[ccy];
     if (fxHistory[ccy]?.size > 0) return; // already loaded
@@ -3481,11 +3725,18 @@ async function fetchFxHistory(fromDate) {
       });
       fxHistory[ccy] = map;
       console.log(`[fx] ✓ ${ticker} — ${map.size} days, latest: ${[...map.values()].at(-1).toFixed(4)}`);
+    } else if (cache[ccy]?.size > 0) {
+      // Live fetch failed — use the last successfully cached historical rate
+      // map (still date-specific) instead of collapsing to one flat number.
+      fxHistory[ccy] = cache[ccy];
+      fxHistoryFromCache.add(ccy);
+      console.warn(`[fx] ✗ ${ticker} — live fetch failed, using cached rates from localStorage (${cache[ccy].size} days) instead of flat fallback ${FX_FALLBACK[ccy]}`);
     } else {
-      console.warn(`[fx] ✗ ${ticker} — fetch failed, using static fallback ${FX_FALLBACK[ccy]}`);
+      console.warn(`[fx] ✗ ${ticker} — fetch failed, no cache available, using static fallback ${FX_FALLBACK[ccy]}`);
       fxHistory[ccy] = new Map(); // empty map triggers fallback
     }
   }));
+  saveFxHistoryCache(fxHistory);
 }
 
 
@@ -3575,7 +3826,15 @@ async function fetchAllPrices() {
 
   const sleep = ms => new Promise(r => setTimeout(r, ms));
 
-  let done = 0, failed = [];
+  let done = 0, failed = [], fromCache = [];
+
+  // Last-known-good price+dividend history from localStorage, used only
+  // when ALL CORS_PROXIES fail for a ticker (see PRICE_HISTORY_CACHE_KEY
+  // above). priceCacheUpdates accumulates this session's genuinely fresh
+  // fetches, merge-saved back to localStorage once at the end — mirrors
+  // fetchFxHistory()'s cache/save pattern exactly.
+  const priceHistoryStore = loadPriceHistoryCache();
+  const priceCacheUpdates = {};
 
   // Always include ES3.SI in the fetch list so the annual benchmark comparison
   // has data back to ES3's inception (2002-04-17), regardless of how far back
@@ -3601,9 +3860,59 @@ async function fetchAllPrices() {
           await sleep(RETRY_DELAY);
           data = await fetchYahoo(ticker, fetchFrom);
         }
+
+        // Both CORS proxies (and the 429 retry) failed. Before giving up,
+        // check for a last-known-good series in localStorage — this is
+        // the SAME shape a live fetch returns, so every downstream
+        // consumer (buildNavSeries, computePriceCoverage, etc.) treats it
+        // identically to a fresh fetch, just possibly a session or two
+        // stale. Dividends ride along in the same cache entry — restoring
+        // them into divCache here prevents the class of bug fixed in
+        // 1630398 (a cached-price session silently losing dividend
+        // history for that ticker).
+        if (!data.ok) {
+          const cached = priceHistoryStore[ticker];
+          if (cached && cached.d && cached.d.length) {
+            const dates  = cached.d.map(ymdToDate);
+            const closes = cached.c;
+            const dividends = (cached.div || []).map(dv => ({ date: ymdToDate(dv.d), amount: dv.a }));
+            divCache[ticker] = { dividends, currency: cached.ccy };
+            clearDivSplitCache();
+            data = {
+              dates, closes,
+              prevClose: closes.length >= 2 ? closes[closes.length - 2] : null,
+              prevDate: dates.length >= 2 ? dates[dates.length - 2] : null,
+              currency: cached.ccy,
+              regularMarketPrice: closes.length ? closes[closes.length - 1] : null,
+              shortName: cached.name || '',
+              ok: true, fromCache: true
+            };
+            priceHistoryFromCache.add(ticker);
+            fromCache.push(sym);
+            console.warn(`[prices] ${ticker} — all proxies failed, using cached history from localStorage (${closes.length} days, as of ${cached.d[cached.d.length-1]})`);
+          }
+        }
+
         priceCache[ticker] = data;
         if (!data.ok) failed.push(sym);
         if (data.ok && data.shortName && !_es3Benchmark) nameCache[sym] = data.shortName;
+
+        // Genuinely fresh live data (not itself a cache-restore) — queue
+        // it for persisting back to localStorage once at the end of this
+        // batch run, same merge-save pattern as saveFxHistoryCache().
+        // compactPriceSeries() keeps recent history at full daily
+        // resolution and coarsens anything older than
+        // PRICE_CACHE_FULL_RES_DAYS to ~weekly — see that function for why.
+        if (data.ok && !data.fromCache && data.dates?.length) {
+          const compact = compactPriceSeries(data.dates, data.closes);
+          priceCacheUpdates[ticker] = {
+            d: compact.dates.map(dateToYmd),
+            c: compact.closes.map(v => Math.round(v * 10000) / 10000),
+            div: (divCache[ticker]?.dividends || []).map(dv => ({ d: dateToYmd(dv.date), a: Math.round(dv.amount * 10000) / 10000 })),
+            ccy: data.currency,
+            name: data.shortName || ''
+          };
+        }
       } catch(e) {
         failed.push(sym);
       }
@@ -3611,6 +3920,8 @@ async function fetchAllPrices() {
       updateFetchUI(done, work.length);
     }));
   }
+
+  savePriceHistoryCache(priceCacheUpdates);
 
   banner.classList.remove('active');
   fetchAbortController = null;
@@ -3635,22 +3946,30 @@ async function fetchAllPrices() {
   fetchAnnouncedDividends(false); // false = allow throttle; manual Refresh buttons call with no arg (forced)
 
   // Show summary
-  const succeeded   = work.length - failed.length;
-  const closedCount = work.filter(w => w._closedPosition).length;
-  const openCount   = work.length - closedCount - (work.find(w => w._es3Benchmark) ? 1 : 0);
-  if (failed.length && succeeded === 0) {
+  // Show summary — three-way now: genuinely live this session, restored
+  // from localStorage cache (all proxies failed today), or truly failed
+  // (no live data and no cache available either).
+  const liveSucceeded = work.length - failed.length - fromCache.length;
+  const closedCount   = work.filter(w => w._closedPosition).length;
+  const openCount     = work.length - closedCount - (work.find(w => w._es3Benchmark) ? 1 : 0);
+
+  if (failed.length && liveSucceeded === 0 && fromCache.length === 0) {
     toast(`All price fetches failed — check console (F12). Using last transaction prices.`, 'error');
     showStatus('error',
       `<strong>Price fetch failed for all symbols.</strong><br>
        Open browser console (F12 → Console) and look for <code>[prices]</code> lines to diagnose.<br>
-       Common causes: ad-blocker blocking the proxy, or Yahoo rate-limiting.<br>
+       Common causes: ad-blocker blocking all proxies, or Yahoo rate-limiting.<br>
        Try the <strong>Tickers</strong> button to manually verify ticker symbols.`);
-  } else if (failed.length) {
-    toast(`Prices loaded for ${succeeded}/${work.length} symbols. Failed: ${failed.join(', ')}`, 'info');
+  } else if (failed.length || fromCache.length) {
+    const parts = [];
+    if (liveSucceeded > 0) parts.push(`${liveSucceeded} live`);
+    if (fromCache.length > 0) parts.push(`${fromCache.length} from cache`);
+    if (failed.length > 0) parts.push(`${failed.length} failed`);
+    toast(`Prices: ${parts.join(', ')} (of ${work.length} symbols)`, (fromCache.length && !failed.length) ? 'success' : 'info');
     showStatus('info',
-      `Loaded closing prices for <strong>${succeeded}</strong> symbols. ` +
-      `<strong>${failed.length}</strong> failed (${failed.join(', ')}) — using last transaction price for those. ` +
-      `Click <strong>Tickers</strong> to fix ticker symbols.`);
+      `Loaded closing prices for <strong>${liveSucceeded}</strong> symbols live` +
+      (fromCache.length ? `, <strong>${fromCache.length}</strong> from a cached copy (all proxies failed today: ${fromCache.join(', ')})` : '') +
+      (failed.length ? `. <strong>${failed.length}</strong> failed entirely (${failed.join(', ')}) — using last transaction price for those. Click <strong>Tickers</strong> to fix ticker symbols.` : '.'));
   } else {
     const closedNote = closedCount > 0 ? ` + ${closedCount} closed (dividends only)` : '';
     toast(`\u2713 Prices loaded for ${openCount} open positions${closedNote}`, 'success');
@@ -3693,10 +4012,59 @@ function refetchPrices() {
   priceCache        = {};
   divCache          = {};
   fxHistory         = {};
+  fxHistoryFromCache = new Set();
+  priceHistoryFromCache = new Set(); // session tracking only — priceHistoryCache in localStorage is intentionally left intact, same as fxHistoryCache
   announcedDivCache = {};
   liveQuoteCache    = {};
   nameCache         = {};
   fetchAllPrices();
+}
+
+// ─── FX RATE DIAGNOSTICS ─────────────────────────────────────────────
+// Surfaces fxHistory's live/cached/fallback state per currency in-app,
+// so confirming the fxHistoryCache fallback (see FX_HISTORY_CACHE_KEY
+// above) is actually working doesn't require opening DevTools each time.
+// Called on Import/Settings tab open (switchTab) and after every
+// processPortfolio() pass, same lifecycle as renderStaticPriceList().
+function renderFxDiagnostics() {
+  const el = document.getElementById('fx-diagnostics-list');
+  if (!el) return;
+  const currencies = Object.keys(FX_PAIRS);
+  if (!currencies.length) { el.innerHTML = ''; return; }
+
+  const rows = currencies.map(ccy => {
+    const map      = fxHistory[ccy];
+    const hasData  = map && map.size > 0;
+    const keys     = hasData ? [...map.keys()].sort() : [];
+    const isCached = hasData && fxHistoryFromCache.has(ccy);
+    const isLive   = hasData && !isCached;
+
+    let badge, note;
+    if (isLive) {
+      badge = '<span class="price-badge price-live">live</span>';
+      note  = 'Fetched fresh this session from Yahoo Finance';
+    } else if (isCached) {
+      badge = '<span class="price-badge" style="background:rgba(83,74,183,0.12);color:var(--purple)">cached</span>';
+      note  = "Today's live fetch failed — using last successfully cached rates from localStorage";
+    } else {
+      badge = '<span class="price-badge price-est">fallback</span>';
+      note  = `No live or cached data — using ONE flat static rate (${FX_FALLBACK[ccy]}) for every historical date of this currency`;
+    }
+
+    const rangeStr  = hasData ? `${keys[0]} → ${keys.at(-1)} · ${map.size} days` : 'no data loaded yet';
+    const todayRate = getFxRateToday(ccy).toFixed(4);
+
+    return `<div class="currency-row" style="align-items:flex-start">
+      <span style="font-weight:500;min-width:40px">${ccy}</span>
+      <div style="flex:1;min-width:0">
+        <div>${badge} <span style="font-size:11px;color:var(--text-secondary)">${note}</span></div>
+        <div style="font-size:11px;color:var(--text-secondary);margin-top:2px">Coverage: ${rangeStr}</div>
+      </div>
+      <span style="font-size:12px;font-weight:500;white-space:nowrap;margin-left:8px">${todayRate} SGD</span>
+    </div>`;
+  }).join('');
+
+  el.innerHTML = rows;
 }
 
 // ─── TICKER MODAL ─────────────────────────────────────────────────────
@@ -3914,6 +4282,7 @@ function openTickerModal() {
     const ticker = getYahooTicker(sym, h.exch);
     const cached = ticker ? priceCache[ticker] : null;
     const status = !ticker ? '<span class="price-badge price-est">skipped</span>'
+                 : cached?.ok && cached?.fromCache ? '<span class="price-badge" style="background:rgba(83,74,183,0.12);color:var(--purple)" title="Both live proxies failed today — showing last successfully cached copy from localStorage">cached</span>'
                  : cached?.ok ? '<span class="price-badge price-live">✓ fetched</span>'
                  : cached ? '<span class="price-badge price-fail">✗ failed</span>'
                  : '<span class="price-badge price-est">pending</span>';
@@ -4055,6 +4424,19 @@ function buildNavSeries() {
   const lastKnown  = {}; // { sym: price } — last ACCEPTED price, used for NAV valuation
   const rejectedAnchor = {}; // { sym: price } — last REJECTED close, used only as
                               // tomorrow's comparison anchor (hysteresis; see below)
+  // Negative-cumShares tripwire (suggested 2026-06-29 after the NVDA-split
+  // NAV-zeroing bug, built 2026-07-01). A raw pre-split buy not yet covered
+  // by a Corp Actions entry can still drive cumShares[sym] negative even
+  // after the applyCorpActions() fix above — that fix only helps for
+  // corp actions that HAVE been entered; forgetting to log a new one
+  // reproduces the exact same failure mode. Previously this failed
+  // completely silently (the `cumShares[sym] < 0.001` skip-guard below
+  // just quietly zeroes the symbol out of NAV with no visible symptom).
+  // Tracks the worst (most negative) share count per symbol and the date
+  // it first went negative — surfaced on the Alerts tab and folded into
+  // the sidebar bell badge so it can't hide the way the original NVDA
+  // case did for weeks.
+  const negativeShareEvents = {}; // { sym: { firstDate, worstShares } }
   let di = 0;
   const sorted = [...txns];
 
@@ -4069,6 +4451,13 @@ function buildNavSeries() {
       cumShares[t.sym] += t.shares;
       lastKnown[t.sym]  = t.price;
       delete rejectedAnchor[t.sym]; // a real transaction price is authoritative — clear any pending rejection
+      if (cumShares[t.sym] < -0.001) {
+        if (!negativeShareEvents[t.sym]) {
+          negativeShareEvents[t.sym] = { firstDate: t.date, worstShares: cumShares[t.sym] };
+        } else if (cumShares[t.sym] < negativeShareEvents[t.sym].worstShares) {
+          negativeShareEvents[t.sym].worstShares = cumShares[t.sym];
+        }
+      }
       di++;
     }
 
@@ -4161,6 +4550,14 @@ function buildNavSeries() {
       txnDates.has(p.x.toISOString().slice(0,10))
     );
   }
+
+  // ── Negative-cumShares tripwire result ──────────────────────────────
+  // Recomputed fresh on every buildNavSeries() call (not accumulated across
+  // calls), so a warning clears itself automatically once the underlying
+  // Corp Actions entry is added and the position reconciles.
+  portfolio.negativeShareWarnings = Object.entries(negativeShareEvents)
+    .map(([sym, info]) => ({ sym, firstDate: info.firstDate, worstShares: info.worstShares }))
+    .sort((a, b) => a.worstShares - b.worstShares); // most negative first
 }
 
 // ════════════════════════════════════════════════════════════════════
@@ -4193,7 +4590,13 @@ function buildNavSeries() {
 // resting on stale prices" in SGD-days, not just day-counts.
 function computePriceCoverage() {
   const rawTxns = portfolio.transactions.filter(t => !t.isFee).sort((a,b) => a.date - b.date);
-  const txns = netSameDayTransactions(rawTxns).filter(t => !t.isFee);
+  const netted  = netSameDayTransactions(rawTxns).filter(t => !t.isFee);
+  // Same pipeline order as buildNavSeries() — a raw pre-split buy's share
+  // count would otherwise undercount shares actually held post-split,
+  // producing a wrong holding window and wrong coverage weighting for that
+  // symbol (originally identified as an open item 2026-06-30, fixed
+  // 2026-07-01 alongside the same bug in five other functions).
+  const txns = applyCorpActions(netted);
   if (!txns.length) return [];
 
   // Symbol metadata from ALL transactions (open + closed) — same rationale
@@ -6063,8 +6466,17 @@ function renderHoldings() {
   const pillClass = { stock:'pill-stock', etf:'pill-etf', reit:'pill-reit', bond:'pill-bond' };
   tbody.innerHTML = items.map(h => {
     const pc = h.pnl>=0?'up':'down';
-    const dayCls = h.eodDayChg === null ? '' : h.eodDayChg >= 0 ? 'up' : 'down';
-    const dayTxt = h.eodDayChg === null ? '—' : `${h.eodDayChg>=0?'+':''}${h.ccy} ${Math.abs(h.eodDayChg).toFixed(3)}`;
+    // Day change now shows VALUE change (shares × price move, FX-converted
+    // to SGD), not the raw per-share price move — matches what every other
+    // money column in this table is denominated in, and matches the
+    // convention already used by the Dashboard's aggregate Day change KPI
+    // (see updateKPIs(): toSGD(hd.shares * hd.eodDayChg, hd.ccy, hd.eodDate)).
+    // Previously showed e.g. "SGD 0.020" (a price tick) right next to a
+    // Value (SGD) column showing thousands — not comparable at a glance,
+    // and didn't reflect actual position size like every other $ column.
+    const dayChgValSGD = h.eodDayChg === null ? null : toSGD(h.shares * h.eodDayChg, h.ccy, h.eodDate);
+    const dayCls = dayChgValSGD === null ? '' : dayChgValSGD >= 0 ? 'up' : 'down';
+    const dayTxt = dayChgValSGD === null ? '—' : `${dayChgValSGD>=0?'+':'-'}S$${fmt(Math.abs(dayChgValSGD))}`;
     return `<tr>
       <td>${symWithName(h.sym)}</td>
       <td style="color:var(--text-secondary)">${h.exch}</td>
@@ -6148,6 +6560,13 @@ function renderHoldingsSummary(allHoldings) {
     }
   });
   const dayChgMostCommonDate3 = Object.entries(dayChgDateCounts3).sort((a,b)=>b[1]-a[1])[0]?.[0] || '';
+  // Count holdings that DO have a valid day-change figure but whose eodDate
+  // falls on a different day than the majority — these are silently dropped
+  // from every currency row's total below (and from the grand total), so
+  // surface the count on the Total row rather than leaving it invisible.
+  // Mirrors the Dashboard KPI's "N pending" sub-label, which flags the same
+  // kind of exclusion for its own aggregate. Added 2026-07-04.
+  let dayChgExcludedCount = 0;
   const byCcy = {};
   allHoldings.forEach(h => {
     const ccy = h.ccy;
@@ -6173,14 +6592,18 @@ function renderHoldingsSummary(allHoldings) {
     if (fxNow > 0) {
       r.valueNative += h.valueSGD / fxNow;
     }
-    if (h.eodDayChg !== null && h.eodDate &&
-        h.eodDate.toISOString().slice(0,10) === dayChgMostCommonDate3) {
-      const dc = h.shares * h.eodDayChg;
-      r.dayChgNative += dc;
-      // Use h.eodDate, not today's FX rate (same fix as the KPI cards,
-      // 2026-06-25) — the price move happened on eodDate.
-      r.dayChgSGD    += toSGD(dc, ccy, h.eodDate);
-      r.hasDayChg = true;
+    if (h.eodDayChg !== null && h.eodDate) {
+      const dcDateStr = h.eodDate.toISOString().slice(0,10);
+      if (dcDateStr === dayChgMostCommonDate3) {
+        const dc = h.shares * h.eodDayChg;
+        r.dayChgNative += dc;
+        // Use h.eodDate, not today's FX rate (same fix as the KPI cards,
+        // 2026-06-25) — the price move happened on eodDate.
+        r.dayChgSGD    += toSGD(dc, ccy, h.eodDate);
+        r.hasDayChg = true;
+      } else {
+        dayChgExcludedCount++; // different EOD date — excluded, see Total row note
+      }
     }
   });
 
@@ -6215,10 +6638,13 @@ function renderHoldingsSummary(allHoldings) {
   }
   function fxLabel(ccy) {
     if (ccy === 'SGD') return '';
-    const rate   = getFxRateToday(ccy);
-    const isLive = fxHistory[ccy]?.size > 0;
-    const badge  = isLive
+    const rate     = getFxRateToday(ccy);
+    const isLive   = fxHistory[ccy]?.size > 0 && !fxHistoryFromCache.has(ccy);
+    const isCached = fxHistory[ccy]?.size > 0 && fxHistoryFromCache.has(ccy);
+    const badge    = isLive
       ? '<span class="price-badge price-live" title="EOD closing FX from Yahoo">EOD FX</span>'
+      : isCached
+      ? '<span class="price-badge" style="background:rgba(83,74,183,0.12);color:var(--purple)" title="Today\'s live FX fetch failed — using last successfully cached rates from localStorage">cached FX</span>'
       : '<span class="price-badge price-est"  title="Static fallback — fetch prices for live rate">est FX</span>';
     return ` ${badge} <span style="font-size:10px;color:var(--text-secondary)">${rate.toFixed(4)}</span>`;
   }
@@ -6295,7 +6721,7 @@ function renderHoldingsSummary(allHoldings) {
   const totComboCls   = totCombo >= 0 ? 'up' : 'down';
 
   const totDayCell = anyDay
-    ? `<td style="text-align:right;font-weight:600" class="${totDayCls}">${totDay>=0?'+':'-'}S$${fmt(Math.abs(totDay))}</td>`
+    ? `<td style="text-align:right;font-weight:600" class="${totDayCls}">${totDay>=0?'+':'-'}S$${fmt(Math.abs(totDay))}${dayChgExcludedCount ? `<br><span style="font-size:10px;font-weight:400;color:var(--text-secondary)" title="These holdings' latest EOD price update landed on a different date than the portfolio-wide majority EOD date, so their day-change is excluded from this total to avoid blending a stale move in with everyone else's current one. See the EOD closing prices table for which symbols and dates.">${dayChgExcludedCount} excluded — different EOD date</span>` : ''}</td>`
     : '<td style="text-align:right;color:var(--text-secondary)">—</td>';
   const totDivCell = hasDivData
     ? `<td style="text-align:right;font-weight:600;color:var(--green)">+S$${fmt(totDivs)}</td>`
@@ -6937,13 +7363,18 @@ function renderRealisedCcySummary(summaryByTicker, soldSyms) {
   // FX label — badge + current rate in currency column
   function fxLabel(ccy) {
     if (ccy === 'SGD') return '';
-    const rate   = getFxRateToday(ccy);
-    const isLive = fxHistory[ccy]?.size > 0;
-    const title  = isLive
+    const rate     = getFxRateToday(ccy);
+    const isLive   = fxHistory[ccy]?.size > 0 && !fxHistoryFromCache.has(ccy);
+    const isCached = fxHistory[ccy]?.size > 0 && fxHistoryFromCache.has(ccy);
+    const title    = isLive
       ? 'Current EOD FX rate (for reference — P&amp;L converted at transaction-date rates)'
+      : isCached
+      ? "Today's live FX fetch failed — showing last cached rate (for reference — P&amp;L converted at transaction-date rates)"
       : 'Static fallback rate (fetch prices for live rate) — P&amp;L converted at transaction-date rates';
     const badge  = isLive
       ? `<span class="price-badge price-live" title="${title}">EOD FX</span>`
+      : isCached
+      ? `<span class="price-badge" style="background:rgba(83,74,183,0.12);color:var(--purple)" title="${title}">cached FX</span>`
       : `<span class="price-badge price-est"  title="${title}">est FX</span>`;
     return ` ${badge} <span style="font-size:10px;color:var(--text-secondary)">${rate.toFixed(4)}</span>`;
   }
@@ -7145,6 +7576,14 @@ function getClosedPositionsSummary(sellRows) {
 // ccy directly rather than reading portfolio.holdings.
 function buildSymbolXirrCFs(sym, exch, ccy) {
   const flows = [];
+  // Corp-action-adjusted transactions for this symbol — used below for the
+  // dividend shares-held-before-exdate calc. A raw pre-split buy's share
+  // count would otherwise undercount shares actually held by a post-split
+  // ex-date if the symbol has any entry in the Corp Actions registry.
+  // (Not needed for the cash-flow loop just below: shares×price is
+  // invariant under applyCorpActions()'s split/bonus/rights adjustment by
+  // construction, so raw is fine there.)
+  const symTxnsAdj = applyCorpActions(portfolio.transactions.filter(t => !t.isFee && t.sym === sym));
   portfolio.transactions
     .filter(t => !t.isFee && t.sym === sym)
     .forEach(t => {
@@ -7161,8 +7600,7 @@ function buildSymbolXirrCFs(sym, exch, ccy) {
       const exStr = date.toISOString().slice(0,10);
       const dps   = divOverrideDps(divOverrideKey(sym, exStr)) ?? amount;
       let shares = 0;
-      portfolio.transactions
-        .filter(t => !t.isFee && t.sym === sym)
+      symTxnsAdj
         .forEach(t => {
           const tStr = (t.date instanceof Date ? t.date : new Date(t.date)).toISOString().slice(0,10);
           if (tStr < exStr) shares += t.shares;
@@ -8006,14 +8444,16 @@ function renderPerformance() {
       const ticker = getYahooTicker(hld.sym, hld.exch);
       const cached = ticker ? divCache[ticker] : null;
       if (!cached?.dividends?.length) return;
+      // Corp-action-adjusted transactions for this symbol — see
+      // buildSymbolXirrCFs() for why raw shares aren't safe to sum here.
+      const symTxnsAdj = applyCorpActions(portfolio.transactions.filter(t => !t.isFee && t.sym === hld.sym));
       cached.dividends.forEach(({ date, amount }) => {
         const exDateStr = date.toISOString().slice(0,10);
         const ovKey = divOverrideKey(hld.sym, exDateStr);
         const dps   = divOverrideDps(ovKey) ?? amount;
         // Shares held before ex-date
         let shares = 0;
-        portfolio.transactions
-          .filter(t => !t.isFee && t.sym === hld.sym)
+        symTxnsAdj
           .forEach(t => {
             const tStr = (t.date instanceof Date ? t.date : new Date(t.date)).toISOString().slice(0,10);
             if (tStr < exDateStr) shares += t.shares;
@@ -8820,6 +9260,9 @@ function buildPortfolioXirrCFs(fromDate, toDate, openingValueSGD) {
     const ticker = getYahooTicker(hld.sym, hld.exch);
     const cached = ticker ? divCache[ticker] : null;
     if (!cached?.dividends?.length) return;
+    // Corp-action-adjusted transactions for this symbol — see
+    // buildSymbolXirrCFs() for why raw shares aren't safe to sum here.
+    const symTxnsAdj = applyCorpActions(portfolio.transactions.filter(t => !t.isFee && t.sym === hld.sym));
     cached.dividends.forEach(({ date, amount }) => {
       if (from && date < from) return;
       if (date > now) return;
@@ -8827,8 +9270,7 @@ function buildPortfolioXirrCFs(fromDate, toDate, openingValueSGD) {
       const dps   = divOverrideDps(divOverrideKey(hld.sym, exStr)) ?? amount;
       // Shares held just before ex-date
       let shares = 0;
-      portfolio.transactions
-        .filter(t => !t.isFee && t.sym === hld.sym)
+      symTxnsAdj
         .forEach(t => {
           const tStr = (t.date instanceof Date ? t.date : new Date(t.date)).toISOString().slice(0,10);
           if (tStr < exStr) shares += t.shares;
@@ -9054,13 +9496,15 @@ function renderAnnualTwrTable(cumDivMap) {
       const ticker = getYahooTicker(hld.sym, hld.exch);
       const cached = ticker ? divCache[ticker] : null;
       if (!cached?.dividends?.length) return;
+      // Corp-action-adjusted transactions for this symbol — see
+      // buildSymbolXirrCFs() for why raw shares aren't safe to sum here.
+      const symTxnsAdj = applyCorpActions(portfolio.transactions.filter(t => !t.isFee && t.sym === hld.sym));
       cached.dividends.forEach(({ date, amount }) => {
         const dStr = date.toISOString().slice(0,10);
         if (dStr <= effectiveStartStr || dStr > yearEndStr) return;
         const dps = divOverrideDps(divOverrideKey(hld.sym, dStr)) ?? amount;
         let shares = 0;
-        portfolio.transactions
-          .filter(t => !t.isFee && t.sym === hld.sym)
+        symTxnsAdj
           .forEach(t => {
             const tStr = (t.date instanceof Date ? t.date : new Date(t.date)).toISOString().slice(0,10);
             if (tStr < dStr) shares += t.shares;
@@ -9420,8 +9864,14 @@ function renderExposure() {
   mkDoughnut('currChart',byCcy,['#1D9E75','#378ADD','#BA7517','#534AB7','#D4537E','#888780']);
   const total=Object.values(byCcy).reduce((a,b)=>a+b,0);
   document.getElementById('currency-detail').innerHTML = Object.entries(byCcy).sort((a,b)=>b[1]-a[1]).map(([ccy,val])=>{
-    const rate = getFxRateToday(ccy);
-    const src  = fxHistory[ccy]?.size > 0 ? '<span class="price-badge price-live">live</span>' : '<span class="price-badge price-est">fallback</span>';
+    const rate     = getFxRateToday(ccy);
+    const isLive   = fxHistory[ccy]?.size > 0 && !fxHistoryFromCache.has(ccy);
+    const isCached = fxHistory[ccy]?.size > 0 && fxHistoryFromCache.has(ccy);
+    const src      = isLive
+      ? '<span class="price-badge price-live">live</span>'
+      : isCached
+      ? '<span class="price-badge" style="background:rgba(83,74,183,0.12);color:var(--purple)" title="Today\'s live FX fetch failed — using last successfully cached rate from localStorage">cached</span>'
+      : '<span class="price-badge price-est">fallback</span>';
     return `<div class="currency-row"><span style="font-weight:500">${ccy}</span><span style="color:var(--text-secondary)">FX: ${rate.toFixed(4)} SGD ${src}</span><span>S$${fmt(val)}</span><span style="font-weight:500">${(val/total*100).toFixed(1)}%</span></div>`;
   }).join('');
   // Recompute weight LOCALLY within the filtered subset, not the global
@@ -10368,23 +10818,32 @@ function submitManualEntry() {
 // past as of 2026-06-27), still passed the abs()-based window and kept
 // showing in both Upcoming cards as if still owed, when it had already
 // been paid. A dividend with a KNOWN real pay date in the past is never
-// "upcoming" — full stop, no grace period in that direction.
+// "upcoming" — full stop, no grace period in that direction. That claim
+// was only half-true until 2026-07-01: PAY_DATE_BACKWARD_GRACE_DAYS was
+// still set to 2 (not 0), so a dividend paid up to 2 days ago still
+// passed the check — confirmed live on Y03: pay date 2026-06-30, still
+// showing on both Upcoming cards on 2026-07-01 (~1.2 days after payment).
+// Now genuinely 0 — a known real pay date in the past excludes immediately.
 // The ex-date-only case still allows a SMALL backward grace window
-// (EX_DATE_ONLY_BACKWARD_GRACE_DAYS) because without a real pay date we
-// genuinely don't know if it's been paid yet — Y03's case: ex-date alone
-// was 47 days in the past, dividend was almost certainly already paid by
-// the time it was shown, which is a known, accepted imprecision of this
-// fallback (documented in the original Y03 fix) — but that grace window
-// is intentionally much smaller than the full forward window, and never
-// applies once we have an actual confirmed pay date.
+// (YAHOO_FALLBACK_EX_DATE_BACKWARD_GRACE_DAYS) because without a real pay
+// date we genuinely don't know if it's been paid yet. This was previously
+// set to 60 days — accidentally equal to the forward window, rather than
+// "much smaller" as this comment always claimed — which let entries like
+// Y03 and O9P (no confirmed pay date) keep showing on both Upcoming cards
+// for up to 60 days after their ex-date had already passed, almost
+// certainly long after actually being paid (fixed 2026-06-30). Now a real
+// short grace period: long enough to still catch an entry that only just
+// went ex and hasn't been picked up by dividends.sg yet, short enough that
+// it drops off once it's clearly stale. Never applies once we have an
+// actual confirmed pay date (see the PAY_DATE_BACKWARD_GRACE_DAYS branch).
 //
 // Only returns symbols NOT already present in announcedDivCache (any
 // source) — dividends.sg/manual entries always take priority when they
 // exist, since they're more reliable for pay-date and DPS precision.
 const YAHOO_FALLBACK_PAY_DATE_FORWARD_WINDOW_DAYS  = 14;
-const YAHOO_FALLBACK_PAY_DATE_BACKWARD_GRACE_DAYS  = 2;
+const YAHOO_FALLBACK_PAY_DATE_BACKWARD_GRACE_DAYS  = 0;
 const YAHOO_FALLBACK_EX_DATE_FORWARD_WINDOW_DAYS   = 60;
-const YAHOO_FALLBACK_EX_DATE_BACKWARD_GRACE_DAYS   = 60;
+const YAHOO_FALLBACK_EX_DATE_BACKWARD_GRACE_DAYS   = 7;
 function getYahooFallbackUpcomingDivs() {
   const now = new Date();
   const out = [];
@@ -10403,11 +10862,21 @@ function getYahooFallbackUpcomingDivs() {
     if (!latest) return;
 
     const exDate = latest.date;
-    // sgxPayDateCache may have a real pay date even when announcedDivCache
-    // doesn't (the two caches are populated independently — see parseViewPage).
-    const exDateStr  = exDate.toISOString().slice(0, 10);
-    const sgxPayStr  = sgxPayDateCache[hld.sym]?.[exDateStr];
-    const payDate    = sgxPayStr ? new Date(sgxPayStr) : null;
+    // Prefer a pay date embedded directly in Yahoo's own dividend event
+    // payload when present — this can be more current than sgxPayDateCache,
+    // which only gets populated by scraping dividends.sg's /view/{sym} page
+    // and can lag behind what Yahoo already knows. Confirmed live 2026-07-01
+    // on O9P: its newest dividend (ex 2026-06-02) already carried its own
+    // payDate of 2026-06-30 straight from Yahoo, but sgxPayDateCache's
+    // newest key for O9P was still stuck at 2026-03-02 — ignoring the
+    // embedded field anchored the window on the stale ex-date instead of
+    // the real (already-passed) pay date, so it kept showing as "upcoming"
+    // under the ex-date-only branch's wider grace window. Falls back to
+    // sgxPayDateCache, then to ex-date-only, in that order of preference.
+    const exDateStr    = exDate.toISOString().slice(0, 10);
+    const sgxPayStr    = sgxPayDateCache[hld.sym]?.[exDateStr];
+    const yahooPayDate = latest.payDate ? (latest.payDate instanceof Date ? latest.payDate : new Date(latest.payDate)) : null;
+    const payDate       = yahooPayDate || (sgxPayStr ? new Date(sgxPayStr) : null);
     const anchorDate = payDate || exDate; // what we judge "recent/soon" against
     const diffMs     = anchorDate - now;  // POSITIVE = still in the future, NEGATIVE = already passed
     const forwardMs  = (payDate ? YAHOO_FALLBACK_PAY_DATE_FORWARD_WINDOW_DAYS  : YAHOO_FALLBACK_EX_DATE_FORWARD_WINDOW_DAYS)  * 86400000;
@@ -11255,6 +11724,12 @@ function renderDividends() {
     if (!cached || !cached.dividends.length) return;
     hasDivData.push(hld.sym);
 
+    // Corp-action-adjusted transactions for this symbol — see
+    // buildSymbolXirrCFs() for why raw shares aren't safe to sum here.
+    // Feeds the actual dividend income totals shown on this tab, so this
+    // one matters more than the diagnostic-only spots.
+    const symTxnsAdj = applyCorpActions(portfolio.transactions.filter(t => !t.isFee && t.sym === hld.sym));
+
     cached.dividends.forEach(({ date, amount, payDate }) => {
       // Skip dividends whose ex-date is in the future — Yahoo sometimes includes
       // upcoming confirmed ex-dates in its events payload; those are projections,
@@ -11265,8 +11740,7 @@ function renderDividends() {
       // Compare as ISO date strings (YYYY-MM-DD) to avoid any timezone drift
       const exDateStr = date.toISOString().slice(0, 10);
       let sharesOnDate = 0;
-      portfolio.transactions
-        .filter(t => !t.isFee && t.sym === hld.sym)
+      symTxnsAdj
         .forEach(t => {
           const tDateStr = (t.date instanceof Date ? t.date : new Date(t.date)).toISOString().slice(0, 10);
           if (tDateStr < exDateStr) sharesOnDate += t.shares;
@@ -12072,16 +12546,55 @@ function deleteTransaction(idx) {
 }
 
 // ─── ALERTS (NEW) ─────────────────────────────────────────────────────
+function renderDataIntegrityWarnings() {
+  const card = document.getElementById('data-integrity-card');
+  const el   = document.getElementById('data-integrity-list');
+  if (!card || !el) return;
+  const warnings = portfolio.negativeShareWarnings || [];
+  if (!warnings.length) { card.classList.add('hidden'); return; }
+  card.classList.remove('hidden');
+  el.innerHTML = warnings.map(w => `<div class="alert-item" style="border-left:3px solid var(--red)">
+    <div class="alert-dot dot-triggered"></div>
+    <span style="font-weight:500;min-width:60px">${symWithName(w.sym)}</span>
+    <span style="color:var(--text-secondary);flex:1">cumulative share count went negative (${w.worstShares.toFixed(2)}) starting ${w.firstDate.toISOString().slice(0,10)} — likely a missing Corp Actions entry (split/bonus/rights) for this symbol</span>
+    <button class="btn-secondary" style="padding:3px 10px;font-size:11px" onclick="switchTab('corpactions')">Fix in Corp Actions</button>
+  </div>`).join('');
+}
+
+function updateAlertBadge(triggeredCount, dataIntegrityCount) {
+  const badge = document.getElementById('alert-count-badge');
+  if (!badge) return;
+  const total = triggeredCount + dataIntegrityCount;
+  if (total > 0) {
+    badge.textContent = total;
+    badge.classList.remove('hidden');
+    badge.title = [
+      triggeredCount     ? `${triggeredCount} price alert${triggeredCount>1?'s':''} triggered` : null,
+      dataIntegrityCount ? `${dataIntegrityCount} data integrity warning${dataIntegrityCount>1?'s':''}` : null
+    ].filter(Boolean).join(' · ');
+  } else {
+    badge.classList.add('hidden');
+    badge.title = '';
+  }
+}
+
 function renderAlerts() {
   // Populate symbol select
   const syms = Object.keys(portfolio.holdings).sort();
   const sel = document.getElementById('a-symbol');
   sel.innerHTML = '<option value="">— select —</option>' + syms.map(s=>`<option value="${s}">${s}</option>`).join('');
 
+  // Data integrity warnings render independently of price alerts below —
+  // must happen before the early return so a negative-cumShares warning
+  // still shows (and still contributes to the badge) even with zero price
+  // alerts set.
+  renderDataIntegrityWarnings();
+  const dataIntegrityCount = (portfolio.negativeShareWarnings || []).length;
+
   const list = document.getElementById('alerts-list');
   if (!alerts.length) {
     list.innerHTML = `<div class="empty-state"><i class="ti ti-bell-off"></i><p>No alerts set. Add a price alert to get notified when a position hits a target price.</p><button class="btn-primary" onclick="openAddAlert()"><i class="ti ti-bell-plus"></i> Add alert</button></div>`;
-    document.getElementById('alert-count-badge').classList.add('hidden');
+    updateAlertBadge(0, dataIntegrityCount);
     destroyChart('alertsChart');
     return;
   }
@@ -12094,10 +12607,7 @@ function renderAlerts() {
     a.triggered = a.dir==='above' ? h.curPrice >= a.target : h.curPrice <= a.target;
     if (a.triggered) triggered++;
   });
-  if (triggered > 0) {
-    document.getElementById('alert-count-badge').textContent = triggered;
-    document.getElementById('alert-count-badge').classList.remove('hidden');
-  } else { document.getElementById('alert-count-badge').classList.add('hidden'); }
+  updateAlertBadge(triggered, dataIntegrityCount);
 
   list.innerHTML = alerts.map((a,i) => {
     const h = portfolio.holdings[a.sym];
@@ -12512,7 +13022,7 @@ function checkBackupReminder() {
 
   const text = document.getElementById('backup-reminder-text');
   if (lastExport === 0) {
-    text.textContent = "You haven't backed up your transactions to CSV yet.";
+    text.textContent = "You haven't backed up your data yet.";
   } else {
     const days = Math.floor(elapsed / 86400000);
     text.textContent = `It's been ${days} day${days === 1 ? '' : 's'} since your last backup.`;
@@ -12550,6 +13060,327 @@ function exportAllPortfoliosSeparateCSVs() {
   ids.forEach(id => exportPortfolioCSV(id));
   toast(`Exported ${ids.length} separate CSV files`, 'success');
 }
+
+// ─── FULL BACKUP (JSON) ─────────────────────────────────────────────
+// Everything the transaction CSV export doesn't cover. Added 2026-07-01
+// after a user reported a Corp Actions entry (NVDA splits) wasn't showing
+// up in their CSV "backup" — that CSV was always transactions-only by
+// design (see exportPortfolioCSV's own comment above), but nothing else
+// was backed up anywhere either: corp actions, price overrides, manual
+// dividend declarations/corrections, classification overrides, holding
+// tags, and diagnostic acknowledgment flags all lived in localStorage
+// only, with zero export path. A cleared browser or a lost machine would
+// have silently lost all of it.
+//
+// Each key's value is stored and restored as the RAW STRING exactly as
+// localStorage holds it — never re-parsed/re-stringified — so a restore
+// is a byte-for-byte round trip with no risk of a JSON.stringify(JSON.parse(x))
+// reformatting mismatch versus what was actually saved.
+//
+// sidebarExpanded (pure UI preference) and lastExportAt (export-reminder
+// bookkeeping, not real data) are deliberately excluded — restoring those
+// would just be surprising, not useful.
+const FULL_BACKUP_KEYS = [
+  PF_REGISTRY_KEY, ACTIVE_PF_IDS_KEY, 'corporateActions',
+  CLASSIFICATION_KEY, TAGS_KEY, DISTRUST_NAV_KEY,
+  RESOLVED_NODATA_KEY, RESOLVED_NODATA_BATCH2_KEY,
+  STATIC_PRICE_KEY, 'divCorrections', 'divCorrectionsLog', MANUAL_DIV_KEY
+];
+
+// ─── AUTO-BACKUP ON MEANINGFUL CHANGE ──────────────────────────────
+// Added 2026-07-01 after a user's browser was configured to clear all site
+// data on tab close — corp actions, price overrides, and manual dividend
+// entries were silently wiped between sessions with no error or warning,
+// discovered only because a corp action "disappeared." That's a browser
+// privacy setting working as designed, not something the app can override
+// (nor should it try to — a site silently defeating a user's explicit
+// privacy choice would be a real problem). This doesn't fight that
+// setting; it just makes losing to it a non-event by keeping a recent
+// backup file waiting in Downloads at all times, so "Restore from backup"
+// (now on the landing screen and topbar, not buried in a modal) is a
+// single click even after a full wipe.
+//
+// Wraps localStorage.setItem rather than hooking every individual save
+// function (saveCorporateActions, setStaticPriceOverride, saveManualEntry,
+// etc.) — FULL_BACKUP_KEYS is already the authoritative list of what
+// matters, so this stays correct automatically if that list ever changes,
+// with nothing to keep in sync by hand.
+//
+// Debounced 3s so a burst of edits (e.g. deleting then re-adding a corp
+// action) produces one download, not one per keystroke. Fires at most
+// once per page session (autoBackupDone) — the goal is "there's always a
+// recent backup," not "download a new file on every single edit."
+let autoBackupTimer = null;
+let autoBackupDone  = false;
+(function installAutoBackupHook() {
+  const origSetItem = localStorage.setItem.bind(localStorage);
+  localStorage.setItem = function(key, value) {
+    origSetItem(key, value);
+    if (autoBackupDone || !FULL_BACKUP_KEYS.includes(key)) return;
+    clearTimeout(autoBackupTimer);
+    autoBackupTimer = setTimeout(() => {
+      if (autoBackupDone) return; // guard against a race if two edits land right at the boundary
+      autoBackupDone = true;
+      exportFullBackup(true);
+    }, 3000);
+  };
+})();
+
+async function exportFullBackup(auto = false) {
+  const data = {};
+  FULL_BACKUP_KEYS.forEach(k => {
+    const v = localStorage.getItem(k);
+    if (v !== null) data[k] = v;
+  });
+  const count = Object.keys(data).length;
+  if (!count) { if (!auto) toast('Nothing to back up yet', 'error'); return; }
+  const payload = {
+    app: "Gumby Yik's PA",
+    backupVersion: 1,
+    exportedAt: new Date().toISOString(),
+    data
+  };
+  const json = JSON.stringify(payload, null, 2);
+  const filename = `gumby-yik-pa-full-backup-${new Date().toISOString().slice(0,10)}${auto ? '-auto' : ''}.json`;
+
+  // Prefer writing directly into the configured backup folder — falls back
+  // to a normal browser download if no folder is set, permission has
+  // lapsed, or the write fails for any reason (e.g. folder deleted/moved).
+  let wroteToFolder = false;
+  if (backupDirHandle) {
+    try {
+      const perm = await backupDirHandle.queryPermission({ mode: 'readwrite' });
+      if (perm === 'granted') {
+        const fileHandle = await backupDirHandle.getFileHandle(filename, { create: true });
+        const writable = await fileHandle.createWritable();
+        await writable.write(json);
+        await writable.close();
+        wroteToFolder = true;
+      }
+    } catch (e) { console.error('Failed to write backup to folder, falling back to download', e); }
+  }
+
+  if (!wroteToFolder) {
+    const blob = new Blob([json], { type: 'application/json' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = filename;
+    a.click();
+    URL.revokeObjectURL(a.href);
+  }
+
+  // Counts as satisfying the backup reminder — same chokepoint downloadCSVText()
+  // uses for the CSV path, since a full backup is a strictly superior backup.
+  try { localStorage.setItem(LAST_EXPORT_KEY, String(Date.now())); } catch {}
+  const dest = wroteToFolder ? ` to ${backupDirHandle.name}` : ' to your Downloads folder';
+  if (auto) {
+    toast(`Auto-backup saved${dest} (${count} data set${count===1?'':'s'}) — in case this browser clears site data`, 'info');
+  } else {
+    toast(`Full backup saved${dest} — ${count} data set${count===1?'':'s'} included`, 'success');
+    closeModal('full-backup-modal');
+  }
+}
+
+function importFullBackup(input) {
+  const f = input.files[0]; if (!f) return;
+  const r = new FileReader();
+  r.onload = e => {
+    restoreFromBackupText(e.target.result, f.name);
+    input.value = '';
+  };
+  r.readAsText(f);
+}
+
+// Shared by both restore paths: the manual file-picker (importFullBackup)
+// and the backup-folder auto-discovery (restoreFromBackupFolder).
+function restoreFromBackupText(text, sourceLabel) {
+  let payload;
+  try { payload = JSON.parse(text); }
+  catch { toast('Could not parse backup file — not valid JSON', 'error'); return; }
+  if (!payload || typeof payload.data !== 'object' || !payload.data) {
+    toast("This doesn't look like a Gumby Yik's PA backup file", 'error'); return;
+  }
+  const keys = Object.keys(payload.data);
+  if (!keys.length) { toast('Backup file has no data to restore', 'error'); return; }
+  const dateStr = payload.exportedAt ? new Date(payload.exportedAt).toLocaleString('en-SG') : 'an unknown date';
+  const proceed = confirm(
+    `Restore backup from ${dateStr}${sourceLabel ? ` (${sourceLabel})` : ''}?\n\n` +
+    `This will OVERWRITE the matching data in this browser (${keys.length} data set${keys.length===1?'':'s'}: corp actions, price overrides, dividend data, and similar) with what's in the backup file. This cannot be undone.\n\n` +
+    `Continue?`
+  );
+  if (!proceed) return;
+  let restored = 0;
+  keys.forEach(k => {
+    try { localStorage.setItem(k, payload.data[k]); restored++; }
+    catch (err) { console.error('Failed to restore key', k, err); }
+  });
+  toast(`Restored ${restored} data set${restored===1?'':'s'} — reloading…`, 'success');
+  // A full reload is the simplest reliable way to make every in-memory
+  // JS variable that was initialized once from localStorage at page load
+  // (corporateActions, staticPriceOverrides, etc.) re-sync from what was
+  // just written, rather than hunting down and re-running each loader.
+  setTimeout(() => location.reload(), 900);
+}
+
+// ─── BACKUP FOLDER (File System Access API — Chrome/Edge/Opera only) ──
+// Added 2026-07-01, same session as the auto-backup-on-edit feature, at
+// the user's request: let backup/restore write to and read from a chosen
+// folder directly, instead of always going through the browser's default
+// Downloads folder and a manual file picker for restore.
+//
+// This is NOT available in Firefox or Safari — window.showDirectoryPicker
+// is a Chromium-only API (Chrome/Edge/Opera 86+) as of mid-2026; Firefox
+// has explicitly declined to implement local-disk pickers on standards
+// grounds, and Safari ships only the sandboxed Origin Private File System,
+// which isn't a real user-visible folder. The UI below feature-detects
+// and falls back cleanly to the existing Downloads-folder behavior when
+// unsupported — this was never going to be a universal fix, so it
+// degrades rather than breaking.
+//
+// A granted directory handle can be persisted (IndexedDB, since handles
+// aren't string-serializable and can't live in localStorage), but the
+// browser can still revoke permission at any time (time elapsed, browser
+// restart, site data cleared, etc.) — every write/read re-checks
+// queryPermission() first and falls back gracefully rather than assuming
+// a stored handle still means live access.
+const BACKUP_DIR_SUPPORTED = ('showDirectoryPicker' in window);
+const BACKUP_DIR_IDB_NAME  = 'gumbyPaBackupDir';
+const BACKUP_DIR_STORE     = 'handles';
+const BACKUP_DIR_KEY       = 'backupDir';
+let backupDirHandle        = null; // live, permission-confirmed handle — null unless actively usable
+let backupDirPendingHandle = null; // a stored handle whose permission needs re-confirming
+
+function idbOpenBackupDirDB() {
+  return new Promise((resolve, reject) => {
+    const req = indexedDB.open(BACKUP_DIR_IDB_NAME, 1);
+    req.onupgradeneeded = () => req.result.createObjectStore(BACKUP_DIR_STORE);
+    req.onsuccess = () => resolve(req.result);
+    req.onerror   = () => reject(req.error);
+  });
+}
+async function idbSaveBackupDirHandle(handle) {
+  const db = await idbOpenBackupDirDB();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(BACKUP_DIR_STORE, 'readwrite');
+    tx.objectStore(BACKUP_DIR_STORE).put(handle, BACKUP_DIR_KEY);
+    tx.oncomplete = resolve;
+    tx.onerror    = () => reject(tx.error);
+  });
+}
+async function idbLoadBackupDirHandle() {
+  const db = await idbOpenBackupDirDB();
+  return new Promise((resolve, reject) => {
+    const req = db.transaction(BACKUP_DIR_STORE, 'readonly').objectStore(BACKUP_DIR_STORE).get(BACKUP_DIR_KEY);
+    req.onsuccess = () => resolve(req.result || null);
+    req.onerror   = () => reject(req.error);
+  });
+}
+async function idbClearBackupDirHandle() {
+  const db = await idbOpenBackupDirDB();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(BACKUP_DIR_STORE, 'readwrite');
+    tx.objectStore(BACKUP_DIR_STORE).delete(BACKUP_DIR_KEY);
+    tx.oncomplete = resolve;
+    tx.onerror    = () => reject(tx.error);
+  });
+}
+
+async function initBackupDirHandle() {
+  if (!BACKUP_DIR_SUPPORTED) { renderBackupFolderSetting(); return; }
+  try {
+    const handle = await idbLoadBackupDirHandle();
+    if (!handle) { renderBackupFolderSetting(); return; }
+    const perm = await handle.queryPermission({ mode: 'readwrite' });
+    if (perm === 'granted') backupDirHandle = handle;
+    else backupDirPendingHandle = handle; // stored, but needs a user gesture to re-confirm
+  } catch (e) { console.error('Failed to load backup folder handle', e); }
+  renderBackupFolderSetting();
+}
+
+async function chooseBackupFolder() {
+  if (!BACKUP_DIR_SUPPORTED) { toast("This browser doesn't support choosing a folder — try Chrome, Edge, or Opera.", 'error'); return; }
+  try {
+    const handle = await window.showDirectoryPicker({ mode: 'readwrite', id: 'gumby-pa-backup' });
+    backupDirHandle = handle;
+    backupDirPendingHandle = null;
+    await idbSaveBackupDirHandle(handle);
+    toast(`Backup folder set: ${handle.name}`, 'success');
+  } catch (e) {
+    if (e.name !== 'AbortError') toast('Could not set backup folder: ' + e.message, 'error');
+  }
+  renderBackupFolderSetting();
+}
+
+async function reconnectBackupFolder() {
+  if (!backupDirPendingHandle) return;
+  try {
+    const perm = await backupDirPendingHandle.requestPermission({ mode: 'readwrite' });
+    if (perm === 'granted') {
+      backupDirHandle = backupDirPendingHandle;
+      backupDirPendingHandle = null;
+      toast(`Reconnected to backup folder: ${backupDirHandle.name}`, 'success');
+    } else {
+      toast('Permission was not granted', 'error');
+    }
+  } catch (e) { toast('Could not reconnect: ' + e.message, 'error'); }
+  renderBackupFolderSetting();
+}
+
+async function clearBackupFolder() {
+  backupDirHandle = null;
+  backupDirPendingHandle = null;
+  try { await idbClearBackupDirHandle(); } catch (e) { console.error(e); }
+  toast('Backup folder cleared — using normal downloads again', 'success');
+  renderBackupFolderSetting();
+}
+
+function renderBackupFolderSetting() {
+  const el = document.getElementById('backup-folder-setting');
+  if (!el) return;
+  if (!BACKUP_DIR_SUPPORTED) {
+    el.innerHTML = `<p style="font-size:12px;color:var(--text-secondary)">Choosing a backup folder needs Chrome, Edge, or Opera — this browser doesn't support it. Backups will keep going to your normal Downloads folder instead.</p>`;
+  } else if (backupDirHandle) {
+    el.innerHTML = `<div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+      <span style="font-size:13px"><i class="ti ti-folder-check" style="color:var(--green);margin-right:4px"></i>Backing up to: <strong>${backupDirHandle.name}</strong></span>
+      <button class="btn-secondary" style="padding:4px 10px;font-size:12px" onclick="restoreFromBackupFolder()"><i class="ti ti-history"></i> Restore latest from folder</button>
+      <button class="btn-secondary" style="padding:4px 10px;font-size:12px" onclick="clearBackupFolder()">Change / clear</button>
+    </div>`;
+  } else if (backupDirPendingHandle) {
+    el.innerHTML = `<div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+      <span style="font-size:13px;color:var(--amber)"><i class="ti ti-alert-triangle" style="margin-right:4px"></i>Backup folder access needs to be re-confirmed (browsers require this periodically)</span>
+      <button class="btn-primary" style="padding:4px 10px;font-size:12px" onclick="reconnectBackupFolder()">Reconnect to ${backupDirPendingHandle.name}</button>
+      <button class="btn-secondary" style="padding:4px 10px;font-size:12px" onclick="clearBackupFolder()">Clear</button>
+    </div>`;
+  } else {
+    el.innerHTML = `<div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+      <span style="font-size:13px;color:var(--text-secondary)">Not set — backups go to your normal Downloads folder</span>
+      <button class="btn-secondary" style="padding:4px 10px;font-size:12px" onclick="chooseBackupFolder()"><i class="ti ti-folder-plus"></i> Choose folder…</button>
+    </div>`;
+  }
+}
+
+async function restoreFromBackupFolder() {
+  if (!backupDirHandle) { toast('No backup folder set', 'error'); return; }
+  try {
+    const perm = await backupDirHandle.queryPermission({ mode: 'read' });
+    if (perm !== 'granted') { toast('Backup folder access needs to be reconnected first', 'error'); renderBackupFolderSetting(); return; }
+    const names = [];
+    for await (const [name, handle] of backupDirHandle.entries()) {
+      if (handle.kind === 'file' && name.startsWith('gumby-yik-pa-full-backup-') && name.endsWith('.json')) names.push(name);
+    }
+    if (!names.length) { toast('No backup files found in that folder', 'error'); return; }
+    names.sort(); // filenames are date-prefixed (YYYY-MM-DD[-auto]), so alpha sort is chronological
+    const latest = names[names.length - 1];
+    const fileHandle = await backupDirHandle.getFileHandle(latest);
+    const file = await fileHandle.getFile();
+    const text = await file.text();
+    restoreFromBackupText(text, latest);
+  } catch (e) { toast('Could not read backup folder: ' + e.message, 'error'); }
+}
+
+document.addEventListener('DOMContentLoaded', initBackupDirHandle);
+
+
 
 // Entry point — the Export button in the topbar still calls exportCSV().
 // With one portfolio, exports it directly with no extra clicks. With more
@@ -12618,7 +13449,7 @@ function loadDemo() {
   switchTab('dashboard', 'dashboard');
   toast('Demo data loaded — 12 positions across SGX, LSE & SSB', 'success');
   showStatus('success', `Loaded ${txns.length} demo transactions — SGX stocks, REITs, bonds &amp; global ETFs`);
-  document.getElementById('btn-export').style.display = '';
+  document.getElementById('btn-export').style.display = ''; document.getElementById('btn-full-backup').style.display = '';
 }
 
 function generateDemoData() {
@@ -13127,6 +13958,8 @@ function initApp() {
   refreshImportPfSelect();
   const exportBtn = document.getElementById('btn-export');
   if (exportBtn) exportBtn.style.display = '';
+  const fullBackupBtn = document.getElementById('btn-full-backup');
+  if (fullBackupBtn) fullBackupBtn.style.display = '';
   const names = Object.values(pfRegistry).map(p => p.name).join(', ');
   toast(`Restored ${portfolio.transactions.length} transactions from your last session (${names})`, 'success');
 }
@@ -13212,6 +14045,32 @@ document.addEventListener('DOMContentLoaded', initApp);
       <button class="btn-secondary" onclick="confirmExportFromModal('all-separate')">Export each as its own file</button>
       <button class="btn-secondary" onclick="confirmExportFromModal('all-combined')">Export all combined</button>
       <button class="btn-primary" onclick="confirmExportFromModal('single')">Export selected</button>
+    </div>
+  </div>
+</div>
+
+<!-- Full backup modal — covers everything the transaction CSV export doesn't:
+     corp actions, price overrides, manual dividend declarations/corrections,
+     classification overrides, holding tags, and diagnostic acknowledgment
+     flags. Added 2026-07-01 after a user reported a NVDA corp action entry
+     wasn't appearing in their CSV "backup" — that CSV was always
+     transactions-only by design, but nothing else was backed up either. -->
+<div class="modal-overlay" id="full-backup-modal">
+  <div class="modal" style="max-width:460px">
+    <div class="modal-title">
+      <span>Full backup</span>
+      <button class="modal-close" onclick="closeModal('full-backup-modal')"><i class="ti ti-x"></i></button>
+    </div>
+    <p style="font-size:12px;color:var(--text-secondary);margin-bottom:10px">
+      The CSV export only covers transactions. This backs up everything else stored in this browser: portfolios &amp; transactions, corp actions, price overrides, manual dividend declarations &amp; corrections, classification overrides, and holding tags.
+    </p>
+    <div style="display:flex;flex-direction:column;gap:10px">
+      <button class="btn-primary" onclick="exportFullBackup()"><i class="ti ti-download"></i> Download full backup (JSON)</button>
+      <label class="btn-secondary" style="cursor:pointer;text-align:center">
+        <i class="ti ti-upload"></i> Restore from backup file
+        <input type="file" accept=".json" style="display:none" onchange="importFullBackup(this)">
+      </label>
+      <p style="font-size:11px;color:var(--text-secondary)">Restoring overwrites the matching data in this browser and cannot be undone — you'll be asked to confirm first.</p>
     </div>
   </div>
 </div>

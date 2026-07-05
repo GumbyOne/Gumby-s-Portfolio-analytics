@@ -1,65 +1,88 @@
-# Portfolio Analytics — Running it locally
+# Portfolio Analytics
 
-The easiest way to use this tool is the hosted version — just open this link in your browser, no setup required:
+A self-contained, single-file portfolio analytics dashboard for multi-exchange dividend
+investors. No install, no backend, no account — open the page, import a CSV, get a full
+performance and risk breakdown.
 
-**https://gumbyone.github.io/Gumby-s-Portfolio-analytics/**
+**Live demo:** https://gumbyone.github.io/Gumby-s-Portfolio-analytics/
 
-If you'd rather run it on your own computer instead (offline use, company firewall, or just personal preference), follow the steps below for your operating system.
+## What it does
 
-## Why you can't just double-click the file
+- **Dashboard** — NAV over time, asset allocation, sector exposure, dividend income
+- **Holdings** — live-priced positions with cost basis, P&L, and portfolio weight
+- **Performance** — Sharpe/Sortino, CAGR, alpha/beta vs. benchmark, monthly returns
+  heatmap, and per-position return attribution
+- **Risk & Drawdown** — drawdown-from-peak, VaR/CVaR, return distribution, rolling
+  volatility
+- **Exposure** — breakdowns by asset type, exchange, and currency, with a concentration
+  chart for your largest positions
 
-Opening `index.html` directly by double-clicking it won't work — the app needs to fetch live stock prices and dividend data from the internet, and browsers block those requests when a page is opened this way (a security restriction, not a bug). The page needs to be served over a real local web address (`http://localhost:...`) for the data fetching to work. The steps below set that up.
+It supports SGX, NASDAQ, NYSE, LSE, HKEX, and KLSE out of the box, with automatic
+currency conversion to a single reference currency.
 
-## Step 1: Download the file
+## Getting started
 
-Download `index.html` from this repository and save it to a folder on your computer.
+**Try it instantly:** click **Load demo** on the live demo link above — no file needed.
 
-## Step 2: Start a local server
-
-Pick whichever applies to you:
-
-### Option A — You have Python (most Macs already do)
-
-Open Terminal (Mac) or Command Prompt / PowerShell (Windows), navigate to the folder where you saved the file, and run:
+**Use your own data:** export your transaction history from
+[StocksCafe](https://stockscafe.com) (Portfolio → Transactions → Export Transactions)
+and drop the CSV/TSV file onto the Import tab. Expected columns:
 
 ```
+action, exchange, symbol, date, shares, price, fees, currency, notes
+```
+
+- `action`: `Buy` / `Sell` / `1` / `-1` / `Fees` / `0`
+- `exchange`: `SGX`, `HKEX`, `NYSE`, `NASDAQ`, `LSE`, `SSB`, etc.
+- `date`: `YYYY-MM-DD`, `DD/MM/YYYY`, or `DD.MM.YYYY`
+
+## Your data never leaves your browser
+
+This app has no backend and no analytics. Your transaction data is parsed and held
+entirely in browser memory and `localStorage` on your own machine. The only outbound
+network calls are to Yahoo Finance (for prices and dividends) — nothing about your
+holdings or transactions is ever sent anywhere else.
+
+## How prices are fetched
+
+Prices and dividend history come from Yahoo Finance's public chart endpoint. Since
+Yahoo doesn't serve CORS headers for direct browser requests, the app routes through a
+small chain of public CORS proxies (tried in order until one succeeds), then falls back
+to a locally cached copy of the last successful fetch if every proxy is temporarily
+unavailable. If you're running this behind restrictive antivirus or firewall software,
+you may need to whitelist:
+
+- `query1.finance.yahoo.com` / `query2.finance.yahoo.com`
+- `corsproxy.io`
+- `api.allorigins.win`
+- `api.codetabs.com`
+
+## Running it locally
+
+It's a single HTML file — no build step, no dependencies to install.
+
+```bash
+git clone https://github.com/GumbyOne/Gumby-s-Portfolio-analytics.git
+cd Gumby-s-Portfolio-analytics
 python3 -m http.server 8080
 ```
 
-(On some Windows installs, use `python` instead of `python3`.)
+Then open `http://localhost:8080`.
 
-Leave that window open, then go to **Step 3**.
+## Tech
 
-### Option B — You have Node.js installed
+Vanilla HTML/CSS/JS and [Chart.js](https://www.chartjs.org/) — no framework, no bundler,
+no package.json. Everything lives in one file by design, so it can be opened, read, and
+modified without any tooling.
 
-In the same kind of terminal window, navigate to the folder and run:
+## Limitations
 
-```
-npx serve .
-```
+- Live prices depend on free public data sources and proxies; during an outage, the app
+  falls back to cached or last-known transaction prices rather than failing outright.
+- Benchmark comparisons (STI, S&P 500) are simplified proxy curves, not live index data.
+- This is a personal analytics tool, not financial advice. Verify anything
+  decision-relevant against your broker's own statements.
 
-It will print a local address to open — leave the window running and go to **Step 3**.
+## License
 
-### Option C — You don't have Python or Node, and don't want to install anything
-
-Use the hosted link instead — see the top of this page. That's the zero-install option and is recommended unless you specifically need to run this offline.
-
-## Step 3: Open it in your browser
-
-Go to:
-
-```
-http://localhost:8080
-```
-
-(or whatever address your terminal printed in Option B)
-
-You should see the Portfolio Analytics dashboard. From here, import your own CSV the same way as the hosted version.
-
-## Step 4: When you're done
-
-Go back to the terminal window and press `Ctrl+C` to stop the local server. Your data lives in your browser's local storage on this computer — it doesn't get uploaded anywhere, on the hosted version or the local one.
-
-## Your data, either way
-
-Whether you use the hosted link or run this locally, your portfolio CSV is only ever read inside your own browser. Nothing is sent to a server, to GitHub, or to anyone else. Closing the tab or stopping the local server doesn't erase anything you've already entered — it's saved in your browser until you clear it yourself.
+_TBD — not yet licensed for reuse. Ask before forking for anything beyond personal use._
