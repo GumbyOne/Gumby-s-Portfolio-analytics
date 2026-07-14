@@ -63,16 +63,26 @@ Click **Load demo** on the [live demo](https://gumbyone.github.io/Gumby-s-Portfo
 
 ### Use your own data
 
-1. Export your transaction history from [StocksCafe](https://stockscafe.com) (Portfolio → Transactions → Export Transactions)
+1. Prepare a CSV file with your transaction history (see format below)
 2. Open the app and go to the **Import** tab
 3. Drop your CSV/TSV file or click **Browse file**
 4. Click **Fetch Prices** to pull live EOD data from Yahoo Finance
 
-#### Expected CSV format
+#### CSV format
 
+Your CSV needs a header row followed by one row per transaction:
+
+```csv
+action,exchange,symbol,date,shares,price,fees,currency,notes
+Buy,SGX,D05,15/03/2020,500,20.50,25.00,SGD,DBS accumulate
+Buy,SGX,C38U,10/06/2021,2000,2.15,12.80,SGD,CapitaLand Integrated
+Sell,SGX,D05,02/01/2023,200,35.80,25.00,SGD,Partial profit taking
+Buy,LSE,IWDA,18/07/2022,50,68.30,15.00,USD,iShares World ETF
+Buy,HKEX,3988,05/09/2023,1000,3.45,50.00,HKD,Bank of China
+Buy,NYSE,AAPL,12/11/2023,10,185.50,5.00,USD,Apple
 ```
-action, exchange, symbol, date, shares, price, fees, currency, notes
-```
+
+A blank template CSV (`demo-portfolio.csv`) is included in this repo — download it, fill in your own transactions, and import.
 
 | Field | Values |
 |-------|--------|
