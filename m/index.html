@@ -104,6 +104,14 @@
       <i>&#128246;</i>
       <h2>No snapshot yet</h2>
       <p>Open the desktop app, load your portfolio, and tap the QR icon in the top bar. Scan the code with this phone to load a snapshot here — it'll be saved for offline use too.</p>
+      <p style="margin-top:14px">Already have a link? A Home Screen icon has its own separate storage from Safari, so a scan done in Safari won't show up here automatically — paste the link below once to load it into this installed app.</p>
+      <div style="display:flex;gap:8px;margin-top:14px">
+        <input id="paste-link-input" type="text" inputmode="url" placeholder="Paste snapshot link here"
+          style="flex:1;min-width:0;padding:10px 12px;border-radius:8px;border:0.5px solid var(--border);background:var(--bg-primary);color:var(--text-primary);font-size:13px">
+        <button onclick="loadFromPastedLink()"
+          style="background:var(--green);color:#fff;border:none;border-radius:8px;padding:10px 16px;font-size:13px;font-weight:500;cursor:pointer">Load</button>
+      </div>
+      <div id="paste-error" class="status-line stale hidden" style="margin-top:8px"></div>
     </div>
 
     <div id="content-area" class="hidden">
@@ -141,7 +149,7 @@
       <div class="section-label">Currency breakdown (live)</div>
       <div class="card" id="ccy-breakdown"></div>
 
-      <div class="section-label">Positions (live, by value)</div>
+      <div class="section-label">Positions (live)</div>
       <div class="card" id="positions-list"></div>
     </div>
   </div>
@@ -199,8 +207,13 @@ async function fetchFxRate(ccy) {
 }
 
 // ─── Parse the QR-scan hash: h=TICKER:SYM:SHARES:COSTSGD,... plus frozen KPIs
-function parseSnapshotFromHash() {
-  const hash = location.hash.slice(1);
+function parseSnapshotFromHash(rawHash) {
+  // Accepts either the page's own location.hash or a hash/URL string pasted
+  // in manually (see loadFromPastedLink) — a pasted full URL still has its
+  // hash portion split out here the same way location.hash would give it.
+  let hash = rawHash !== undefined ? rawHash : location.hash.slice(1);
+  const hashIdx = hash.indexOf('#');
+  if (hashIdx !== -1) hash = hash.slice(hashIdx + 1); // strip a full pasted URL down to just the hash
   if (!hash) return null;
   const params = new URLSearchParams(hash);
   const hStr = params.get('h');
@@ -255,7 +268,15 @@ async function computeLive(snap) {
     nav += valueSGD; cost += h.costSGD; prevNav += prevValueSGD;
     const ccyKey = (r && r.ok) ? r.currency : 'SGD';
     byCcy[ccyKey] = (byCcy[ccyKey] || 0) + valueSGD;
-    return { sym: h.sym, valueSGD, dayChgPct: prevValueSGD > 0 ? (valueSGD - prevValueSGD) / prevValueSGD * 100 : 0, live: !!(r && r.ok) };
+    return {
+      sym: h.sym,
+      valueSGD, // kept for sort order, not displayed
+      dayChgSGD: valueSGD - prevValueSGD,
+      dayChgPct: prevValueSGD > 0 ? (valueSGD - prevValueSGD) / prevValueSGD * 100 : 0,
+      eodClose: (r && r.ok) ? r.price : null,
+      ccy: (r && r.ok) ? r.currency : null,
+      live: !!(r && r.ok),
+    };
   });
   positions.sort((a, b) => b.valueSGD - a.valueSGD);
 
@@ -301,8 +322,8 @@ function renderLive(live, asOf, isStale) {
     <div class="pos-row">
       <span class="pos-sym">${p.sym}${p.live ? '' : ' <span style="color:var(--text-secondary);font-weight:400">(frozen)</span>'}</span>
       <span class="pos-right">
-        <div class="pos-val">${fmtSGD(p.valueSGD)}</div>
-        <div class="pos-chg ${p.dayChgPct >= 0 ? 'up' : 'down'}">${p.live ? fmtPct(p.dayChgPct) : '—'}</div>
+        <div class="pos-val">${p.live ? p.ccy + ' ' + p.eodClose.toFixed(3) : '—'}</div>
+        <div class="pos-chg ${p.dayChgSGD >= 0 ? 'up' : 'down'}">${p.live ? (p.dayChgSGD >= 0 ? '+' : '-') + fmtSGD(Math.abs(p.dayChgSGD)).slice(2) + '  ' + fmtPct(p.dayChgPct) : '—'}</div>
       </span>
     </div>`).join('');
 
@@ -336,6 +357,21 @@ function renderLiveUnavailable(snap) {
 function showEmptyState() {
   document.getElementById('empty-state').classList.remove('hidden');
   document.getElementById('content-area').classList.add('hidden');
+}
+
+async function loadFromPastedLink() {
+  const input = document.getElementById('paste-link-input');
+  const errEl = document.getElementById('paste-error');
+  errEl.classList.add('hidden');
+  const snap = parseSnapshotFromHash(input.value.trim());
+  if (!snap) {
+    errEl.textContent = "Couldn't read a snapshot from that link — make sure you copied the full link, including everything after the #.";
+    errEl.classList.remove('hidden');
+    return;
+  }
+  localStorage.setItem(SNAPSHOT_KEY, JSON.stringify(snap));
+  input.value = '';
+  await loadAndRender(snap);
 }
 
 // ─── Init / refresh flow ──────────────────────────────────────────────

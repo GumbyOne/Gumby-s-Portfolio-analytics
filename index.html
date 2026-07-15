@@ -14081,6 +14081,8 @@ function wireSymbolClicks() {
 // Encodes current KPIs + currency breakdown into a URL hash fragment,
 // generates a QR code pointing to the GitHub Pages mobile viewer.
 // User scans with phone → mobile-optimised read-only snapshot.
+let lastMobileSnapshotUrl = '';
+
 function showMobileQR() {
   const MOBILE_BASE = 'https://gumbyone.github.io/Gumby-s-Portfolio-analytics/m/';
   const h = portfolio.holdings || {};
@@ -14126,6 +14128,7 @@ function showMobileQR() {
   params.set('t', Math.floor(Date.now() / 1000)); // Scan timestamp
 
   const url = MOBILE_BASE + '#' + params.toString();
+  lastMobileSnapshotUrl = url; // used by the Copy Link button below
 
   // Generate QR code
   const container = document.getElementById('qr-code-container');
@@ -14148,6 +14151,22 @@ function showMobileQR() {
   });
 
   openModal('qr-modal');
+}
+
+function copyMobileSnapshotLink(btn) {
+  if (!lastMobileSnapshotUrl) return;
+  const done = ok => {
+    if (!btn) return;
+    const original = btn.innerHTML;
+    btn.innerHTML = ok ? '<i class="ti ti-check" style="font-size:12px;margin-right:4px"></i>Copied'
+                        : '<i class="ti ti-x" style="font-size:12px;margin-right:4px"></i>Copy failed';
+    setTimeout(() => { btn.innerHTML = original; }, 1800);
+  };
+  if (navigator.clipboard?.writeText) {
+    navigator.clipboard.writeText(lastMobileSnapshotUrl).then(() => done(true)).catch(() => done(false));
+  } else {
+    done(false);
+  }
 }
 
 // session-only, so every reload lost all transactions and the app sat on
@@ -14384,10 +14403,18 @@ document.addEventListener('DOMContentLoaded', initApp);
       <button class="modal-close" onclick="closeModal('qr-modal')"><i class="ti ti-x"></i></button>
     </div>
     <p style="font-size:12px;color:var(--text-secondary);margin-bottom:14px">
-      Scan with your phone to view a mobile-optimised snapshot of your current KPIs and currency breakdown.
+      Scan with your phone for a live-refreshing snapshot of your holdings, NAV, P&amp;L, and day change.
     </p>
     <div id="qr-code-container" style="display:inline-block;padding:12px;background:#fff;border-radius:8px;margin-bottom:12px"></div>
-    <div id="qr-timestamp" style="font-size:11px;color:var(--text-secondary)"></div>
+    <div id="qr-timestamp" style="font-size:11px;color:var(--text-secondary);margin-bottom:10px"></div>
+    <button class="btn-secondary" onclick="copyMobileSnapshotLink(this)" style="font-size:12px">
+      <i class="ti ti-link" style="font-size:12px;margin-right:4px"></i>Copy link
+    </button>
+    <p style="font-size:11px;color:var(--text-secondary);margin-top:8px">
+      If you've already installed the snapshot to your Home Screen, scanning opens Safari, not the installed
+      icon — paste this link into the installed app once (its empty-state screen has a paste box) to load your
+      data there too.
+    </p>
   </div>
 </div>
 
