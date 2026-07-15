@@ -14087,62 +14087,43 @@ function showMobileQR() {
   const vals = Object.values(h);
   if (!vals.length) { alert('No portfolio data loaded.'); return; }
 
-  // Gather KPIs
-  const nav = portfolio.totalVal || 0;
-  const pnl = portfolio.totalPnl || 0;
-  const pnlPct = portfolio.totalCost > 0 ? pnl / portfolio.totalCost * 100 : 0;
+  // Frozen KPIs — these can't be live-recomputed on the mobile page from a
+  // holdings snapshot alone (they need full transaction/dividend history),
+  // so they stay fixed at whatever they were when this QR was generated.
+  // Deliberately NOT included: NAV, P&L, day change, ES3 day change,
+  // currency breakdown, position count — the mobile viewer now derives
+  // all of those itself from live prices/FX on every open (see 'h' below),
+  // so baking stale versions of them into the hash would be redundant.
   const xirr = document.getElementById('h-xirr')?.textContent || '—';
   const twr = document.getElementById('p-twr-pf')?.textContent || '—';
   const divYtd = document.getElementById('h-div-ytd')?.textContent || '—';
   const divT12 = document.getElementById('h-div')?.textContent || '—';
   const divProj = document.getElementById('h-div-proj-ye')?.textContent || '—';
 
-  // Day change from hidden elements
-  const dcEl = document.getElementById('m-day-chg');
-  const dcPctEl = document.getElementById('m-day-chg-pct');
-  const dc = dcEl?.textContent || '—';
-  const dcPct = dcPctEl?.textContent || '';
+  // Holdings snapshot: ticker:sym:shares:costSGD per position, comma-joined.
+  // The mobile page live-fetches price + FX for each ticker on every open,
+  // so NAV/P&L/day-change/currency breakdown come out current rather than
+  // frozen at scan time. costSGD carries the desktop's own
+  // historical-FX-converted cost basis (h.costSGD) — the mobile page never
+  // reconverts cost using today's FX rate, which would silently blend FX
+  // drift into P&L that has nothing to do with the actual entry price.
+  // Instruments with no resolvable Yahoo ticker (e.g. SSB/bonds) get an
+  // empty ticker field; the mobile page holds those at frozen cost basis
+  // instead of guessing a live price for them.
+  const holdingsStr = vals.map(x => {
+    const ticker = typeof getYahooTicker === 'function' ? (getYahooTicker(x.sym, x.exch) || '') : '';
+    return `${ticker}:${x.sym}:${Math.round(x.shares)}:${Math.round(x.costSGD || 0)}`;
+  }).join(',');
 
-  // ES3 day change
-  const es3Ticker = typeof getYahooTicker === 'function' ? getYahooTicker('ES3', 'SGX') : null;
-  const es3Cached = es3Ticker && typeof priceCache !== 'undefined' ? priceCache[es3Ticker] : null;
-  let es3Pct = '';
-  if (es3Cached?.ok && es3Cached.closes?.length >= 2) {
-    const c1 = es3Cached.closes.at(-1);
-    const c2 = es3Cached.prevClose ?? es3Cached.closes.at(-2);
-    if (c1 && c2 > 0) {
-      const p = (c1 - c2) / c2 * 100;
-      es3Pct = (p >= 0 ? '+' : '') + p.toFixed(2);
-    }
-  }
-
-  // Currency breakdown
-  const byCcy = {};
-  vals.forEach(x => { byCcy[x.ccy] = (byCcy[x.ccy] || 0) + x.valueSGD; });
-  const ccyStr = Object.entries(byCcy)
-    .sort((a, b) => b[1] - a[1])
-    .map(([c, v]) => c + ':' + Math.round(v))
-    .join(',');
-
-  // Position count
-  const pos = vals.length;
-
-  // Build hash — compact keys to keep URL short
+  // Build hash — compact keys to keep the QR payload small
   const params = new URLSearchParams();
-  params.set('n', Math.round(nav));        // NAV
-  params.set('pl', Math.round(pnl));       // P&L
-  params.set('pp', pnlPct.toFixed(2));     // P&L %
-  params.set('x', xirr);                   // XIRR
-  params.set('tw', twr);                   // TWR
-  params.set('dc', dc);                    // Day change
-  params.set('dp', dcPct);                 // Day change %
-  params.set('e3', es3Pct);                // ES3 day %
-  params.set('dy', divYtd);                // Div YTD
-  params.set('d12', divT12);              // Div T12M
-  params.set('dpr', divProj);             // Div projected
-  params.set('c', ccyStr);                // Currency breakdown
-  params.set('p', pos);                   // Position count
-  params.set('t', Math.floor(Date.now() / 1000)); // Timestamp
+  params.set('h', holdingsStr);             // holdings snapshot (ticker:sym:shares:costSGD)
+  params.set('x', xirr);                    // XIRR (frozen)
+  params.set('tw', twr);                    // TWR (frozen)
+  params.set('dy', divYtd);                 // Div YTD (frozen)
+  params.set('d12', divT12);               // Div T12M (frozen)
+  params.set('dpr', divProj);              // Div projected (frozen)
+  params.set('t', Math.floor(Date.now() / 1000)); // Scan timestamp
 
   const url = MOBILE_BASE + '#' + params.toString();
 
