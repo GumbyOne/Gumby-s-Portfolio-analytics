@@ -995,6 +995,7 @@
               <th style="text-align:right">Shares</th>
               <th style="text-align:right">Avg cost</th>
               <th style="text-align:right" id="holdings-price-hdr">Price</th>
+              <th style="text-align:right">Day chg (price)</th>
               <th style="text-align:right">Day chg (SGD)</th>
               <th style="text-align:right">Day chg %</th>
               <th style="text-align:right">Value (SGD)</th>
@@ -6555,7 +6556,7 @@ function renderHoldings() {
   else if (sortBy==='name')   items.sort((a,b)=>a.sym.localeCompare(b.sym));
   else items.sort((a,b)=>b.weight-a.weight);
   const tbody = document.getElementById('holdings-body');
-  if (!items.length) { tbody.innerHTML='<tr><td colspan="11" style="text-align:center;padding:32px;color:var(--text-secondary)">No holdings found.</td></tr>'; return; }
+  if (!items.length) { tbody.innerHTML='<tr><td colspan="12" style="text-align:center;padding:32px;color:var(--text-secondary)">No holdings found.</td></tr>'; return; }
 
   // Price column header badge: "EOD close" when prices fetched, "est" otherwise.
   // All value/P&L calculations use h.curPrice = lastBusinessClose (EOD).
@@ -6584,6 +6585,7 @@ function renderHoldings() {
     // and didn't reflect actual position size like every other $ column.
     const dayChgValSGD = h.eodDayChg === null ? null : toSGD(h.shares * h.eodDayChg, h.ccy, h.eodDate);
     const dayCls = dayChgValSGD === null ? '' : dayChgValSGD >= 0 ? 'up' : 'down';
+    const eodPriceChgTxt = h.eodDayChg === null ? '—' : `${h.ccy} ${h.eodDayChg>=0?'+':''}${h.eodDayChg.toFixed(3)}`;
     const dayTxt = dayChgValSGD === null ? '—' : `${dayChgValSGD>=0?'+':'-'}S$${fmt(Math.abs(dayChgValSGD))}`;
     const dayPctTxt = h.eodDayChgPct === null ? '—' : `${h.eodDayChgPct>=0?'+':''}${h.eodDayChgPct.toFixed(2)}%`;
     return `<tr>
@@ -6591,6 +6593,7 @@ function renderHoldings() {
       <td style="text-align:right">${fmt(h.shares)}</td>
       <td style="text-align:right">${h.ccy} ${h.avgCost.toFixed(3)}</td>
       <td style="text-align:right" class="${dayCls}">${h.ccy} ${h.curPrice.toFixed(3)}${h.priceSource==='manual'?` <span class="price-badge" style="background:rgba(83,74,183,0.12);color:var(--purple)" title="Manual price override — not from Yahoo Finance">manual</span>`:''}</td>
+      <td style="text-align:right" class="${dayCls}">${eodPriceChgTxt}</td>
       <td style="text-align:right" class="${dayCls}">${dayTxt}</td>
       <td style="text-align:right" class="${dayCls}">${dayPctTxt}</td>
       <td style="text-align:right">S$${fmt(h.valueSGD)}</td>
