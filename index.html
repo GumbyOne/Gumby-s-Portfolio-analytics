@@ -570,7 +570,7 @@
       <div class="form-field">
         <label class="form-label">Exchange</label>
         <select id="f-exchange">
-          <option>SGX</option><option>NYSE</option><option>NASDAQ</option><option>LSE</option><option>HKEX</option><option>KLSE</option><option>SSB</option>
+          <option>SGX</option><option>NYSE</option><option>NASDAQ</option><option>LSE</option><option>AMS</option><option>HKEX</option><option>KLSE</option><option>SSB</option>
         </select>
       </div>
       <div class="form-field">
@@ -788,10 +788,10 @@
           <div class="kpi-sub" id="h-div-proj-ye-sub">YTD + remaining est.</div>
         </div>
         <div class="kpi-card">
-          <div class="kpi-label">Dividends (T12M)</div>
+          <div class="kpi-label">Total Dividends</div>
           <div class="kpi-value up" id="h-div">—</div>
           <div class="kpi-pct" id="h-div-t12m-pct"></div>
-          <div class="kpi-sub" id="h-div-sub">trailing 12 months</div>
+          <div class="kpi-sub" id="h-div-sub">cumulative, live positions</div>
         </div>
       </div>
 
@@ -5233,25 +5233,17 @@ function renderDashboardDivKPIs() {
     el_divRecv.textContent = 'S$' + fmt(totalDivs);
   }
 
-  // Mirror dividends into hero strip — use T12M figure
-  const cutoff12mHero = new Date(); cutoff12mHero.setFullYear(cutoff12mHero.getFullYear() - 1);
-  let totalDivs12 = 0;
-  if (hasOpenPositions) {
-    Object.values(h).forEach(hd => {
-      const split12 = computeDividendsSplit(hd.sym, cutoff12mHero);
-      totalDivs12 += split12.unrealised;
-    });
-  }
+  // Mirror dividends into hero strip — use all-time cumulative from live positions
   const hDiv = document.getElementById('h-div');
   const hDivSub = document.getElementById('h-div-sub');
   const hDivT12mPct = document.getElementById('h-div-t12m-pct');
-  if (hDiv) { hDiv.textContent = 'S$' + fmt(totalDivs12); hDiv.className = 'kpi-value up'; }
+  if (hDiv) { hDiv.textContent = 'S$' + fmt(totalDivs); hDiv.className = 'kpi-value up'; }
   if (hDivT12mPct) {
-    const yldPct = portfolio.totalVal > 0 ? totalDivs12 / portfolio.totalVal * 100 : 0;
-    hDivT12mPct.textContent = yldPct > 0 ? yldPct.toFixed(2) + '% yield on NAV' : '';
+    const yldPct = portfolio.totalCost > 0 ? totalDivs / portfolio.totalCost * 100 : 0;
+    hDivT12mPct.textContent = yldPct > 0 ? yldPct.toFixed(2) + '% of cost recovered' : '';
     hDivT12mPct.className   = 'kpi-pct up';
   }
-  if (hDivSub) hDivSub.textContent = 'trailing 12 months';
+  if (hDivSub) hDivSub.textContent = 'cumulative, live positions';
   const el_divPct = document.getElementById('m-div-recv-pct');
   const el_divSub = document.getElementById('m-div-recv-sub');
   {
@@ -14102,7 +14094,7 @@ function showMobileQR() {
   const xirr = document.getElementById('h-xirr')?.textContent || '—';
   const twr = document.getElementById('p-twr-pf')?.textContent || '—';
   const divYtd = document.getElementById('h-div-ytd')?.textContent || '—';
-  const divT12 = document.getElementById('h-div')?.textContent || '—';
+  const divHero = document.getElementById('h-div')?.textContent || '—';
   const divProj = document.getElementById('h-div-proj-ye')?.textContent || '—';
 
   // Holdings snapshot: ticker:sym:shares:costSGD per position, comma-joined.
@@ -14126,7 +14118,7 @@ function showMobileQR() {
   params.set('x', xirr);                    // XIRR (frozen)
   params.set('tw', twr);                    // TWR (frozen)
   params.set('dy', divYtd);                 // Div YTD (frozen)
-  params.set('d12', divT12);               // Div T12M (frozen)
+  params.set('d12', divHero);              // Total dividends from live positions (frozen; param key kept as 'd12' for mobile PWA back-compat)
   params.set('dpr', divProj);              // Div projected (frozen)
   params.set('t', Math.floor(Date.now() / 1000)); // Scan timestamp
 
