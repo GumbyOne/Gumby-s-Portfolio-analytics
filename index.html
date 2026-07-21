@@ -13273,7 +13273,23 @@ async function exportFullBackup(auto = false) {
     data
   };
   const json = JSON.stringify(payload, null, 2);
-  const filename = `gumby-yik-pa-full-backup-${new Date().toISOString().slice(0,10)}${auto ? '-auto' : ''}.json`;
+  // Filename: when the registry holds exactly one portfolio, mirror the CSV export
+  // naming (`${safeName}-${date}.json`) so the JSON pairs visually with its CSV
+  // sibling. A backup is inherently global — it holds the entire pfRegistry plus
+  // all global state (corp actions, price overrides, dividend corrections, etc.) —
+  // so when multiple portfolios exist, naming after just one of them would
+  // misrepresent scope; fall back to the generic prefix in that case.
+  const pfIds   = Object.keys(pfRegistry || {});
+  const dateStr = new Date().toISOString().slice(0,10);
+  const autoStr = auto ? '-auto' : '';
+  let filename;
+  if (pfIds.length === 1) {
+    const pf = pfRegistry[pfIds[0]];
+    const safeName = (pf.name || pfIds[0]).replace(/[^a-z0-9_-]+/gi, '_');
+    filename = `${safeName}-${dateStr}${autoStr}.json`;
+  } else {
+    filename = `gumby-yik-pa-full-backup-${dateStr}${autoStr}.json`;
+  }
 
   // Prefer writing directly into the configured backup folder — falls back
   // to a normal browser download if no folder is set, permission has
@@ -13496,13 +13512,24 @@ async function restoreFromBackupFolder() {
   try {
     const perm = await backupDirHandle.queryPermission({ mode: 'read' });
     if (perm !== 'granted') { toast('Backup folder access needs to be reconnected first', 'error'); renderBackupFolderSetting(); return; }
-    const names = [];
+    // Match .json files whose name ends with a YYYY-MM-DD date, optionally followed
+    // by "-auto" — covers both the old fixed-prefix format
+    // ("gumby-yik-pa-full-backup-YYYY-MM-DD[-auto].json") and the newer
+    // portfolio-name-prefixed format ("{portfolioName}-YYYY-MM-DD[-auto].json").
+    // Sorting by the extracted date (not the filename) keeps discovery chronological
+    // regardless of which naming convention a given backup used.
+    const BACKUP_NAME_RE = /-(\d{4}-\d{2}-\d{2})(-auto)?\.json$/;
+    const candidates = [];
     for await (const [name, handle] of backupDirHandle.entries()) {
-      if (handle.kind === 'file' && name.startsWith('gumby-yik-pa-full-backup-') && name.endsWith('.json')) names.push(name);
+      if (handle.kind !== 'file') continue;
+      const m = name.match(BACKUP_NAME_RE);
+      if (m) candidates.push({ name, date: m[1], auto: !!m[2] });
     }
-    if (!names.length) { toast('No backup files found in that folder', 'error'); return; }
-    names.sort(); // filenames are date-prefixed (YYYY-MM-DD[-auto]), so alpha sort is chronological
-    const latest = names[names.length - 1];
+    if (!candidates.length) { toast('No backup files found in that folder', 'error'); return; }
+    // Chronological: date asc, then non-auto before auto within same date (matches
+    // the prior alpha-sort behavior where "…YYYY-MM-DD.json" < "…YYYY-MM-DD-auto.json").
+    candidates.sort((a, b) => a.date.localeCompare(b.date) || (a.auto === b.auto ? 0 : a.auto ? 1 : -1));
+    const latest = candidates[candidates.length - 1].name;
     const fileHandle = await backupDirHandle.getFileHandle(latest);
     const file = await fileHandle.getFile();
     const text = await file.text();
