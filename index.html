@@ -10062,6 +10062,13 @@ async function fetchDividendsSG() {
     const rows = doc.querySelectorAll('table tr');
 
     const now = new Date();
+    // Compare ex-dates by YYYY-MM-DD *date* rather than by instant. `new Date("2026-07-22")`
+    // parses as midnight UTC = 08:00 SGT, so any comparison of the form `exDate <= now`
+    // (where `now` is the current moment) flips to "past" as soon as we cross 8am SGT on
+    // the ex-date, even though dividends.sg (and SGX itself) still treats the entire ex-date
+    // trading day as "coming". Using string comparison on YYYY-MM-DD keeps the whole ex-date
+    // day inclusive of "upcoming" until the next calendar day begins.
+    const todayStr = now.toISOString().slice(0, 10);
     const heldSGX = {};
     Object.values(portfolio.holdings)
       .filter(h => h.exch === 'SGX')
@@ -10120,7 +10127,8 @@ async function fetchDividendsSG() {
       if (!dps) return;
 
       const exDate = new Date(exStr);
-      if (isNaN(exDate.getTime()) || exDate <= now) return;
+      // Compare on YYYY-MM-DD, not instants — see note near `todayStr` definition above.
+      if (isNaN(exDate.getTime()) || exStr < todayStr) return;
 
       // If same ticker already has an entry for this ex-date (e.g. ordinary + special
       // dividend on the same date — common for SIA C6L), ADD the DPS rather than
@@ -10160,6 +10168,12 @@ async function fetchDividendsSG() {
     function parseViewPage(vHtml, now) {
       const vDoc  = new DOMParser().parseFromString(vHtml, 'text/html');
       const rows  = vDoc.querySelectorAll('table tr');
+      // Compare ex-dates by YYYY-MM-DD *date* rather than by instant — same rationale as
+      // in fetchDividendsSG above. Without this, an ex-date-day dividend gets routed into
+      // byExPast the moment we cross 08:00 SGT on ex-date, so `parsed.upcoming` is null
+      // and the pay date never lands in announcedDivCache even though it's freshly on the
+      // /view page and the dividend has not yet actually paid.
+      const todayStr = now.toISOString().slice(0, 10);
       // Group by ex-date to accumulate ordinary + special on same date.
       // Continuation rows (e.g. the SGD 0.07 special row after SGD 0.22 ordinary)
       // have empty Year/Yield/Total/ExDate/PayDate cells — only Amount is populated.
@@ -10224,7 +10238,7 @@ async function fetchDividendsSG() {
         const ccyMatch = amtStr.match(/([A-Z]{3})/);
         const ccy = ccyMatch ? ccyMatch[1] : 'SGD';
 
-        const byEx = exDate <= now ? byExPast : byExFuture;
+        const byEx = exStr < todayStr ? byExPast : byExFuture;
         if (!byEx[exStr]) byEx[exStr] = { exDate, exStr, dps: 0, currency: ccy, payDate: null };
         byEx[exStr].dps += dps;
         if (payCell && dateRe.test(payCell) && !byEx[exStr].payDate) {
@@ -10267,6 +10281,21 @@ async function fetchDividendsSG() {
             if (h.payDate) sgxPayDateCache[sym][h.exStr] = h.payDate.toISOString().slice(0, 10);
           });
           clearDivSplitCache(); // pay dates feed historyRows via computeDividendsSplit consumers too
+        }
+
+        // Also seed sgxPayDateCache from the upcoming entry — its pay date is
+        // just as authoritative as the historical ones and historyRows needs
+        // it for the same-day-ex-date case. Without this seeding, a dividend
+        // whose ex-date is TODAY (routed to byExFuture by parseViewPage's
+        // date-string filter, see Session-16 comment) has its pay date land
+        // in announcedDivCache for the Upcoming card but nowhere for the YTD
+        // pipeline, so historyRows falls back to ex-date, payDateIsReal=false,
+        // and the row shows on YTD with the misleading "ex-date" stand-in
+        // badge instead of being correctly excluded as not-yet-paid.
+        if (parsed.upcoming && parsed.upcoming.payDate) {
+          if (!sgxPayDateCache[sym]) sgxPayDateCache[sym] = {};
+          sgxPayDateCache[sym][parsed.upcoming.exStr] = parsed.upcoming.payDate.toISOString().slice(0, 10);
+          clearDivSplitCache();
         }
 
         const result = parsed.upcoming;
@@ -11044,22 +11073,23 @@ function renderUpcomingDivEntry(e, now) {
     : e.source === 'yahoo'
     ? `<span class="price-badge price-est" style="background:rgba(186,117,23,0.12);color:var(--amber)" title="Source: Yahoo Finance only — dividends.sg has not posted this yet, and may already be paid.">yahoo</span>`
     : `<span class="price-badge price-est">upcoming</span>`;
-  const dpsLabel  = e.dpsEstimated
-    ? `<span style="margin-left:6px;color:var(--text-secondary)">DPS: <strong style="color:var(--text-primary)">${e.currency} ${e.dps.toFixed(4)}</strong> <span style="font-size:10px;color:var(--amber)">(est.)</span></span>`
-    : `<span style="margin-left:6px;color:var(--text-secondary)">DPS: <strong style="color:var(--text-primary)">${e.currency} ${e.dps.toFixed(4)}</strong></span>`;
   const urgency   = daysAway <= 7  ? 'color:var(--red);font-weight:600'
                   : daysAway <= 30 ? 'color:var(--amber);font-weight:500'
                   : 'color:var(--text-secondary)';
-  return `<div class="div-entry" style="grid-template-columns:80px 1fr auto auto auto;gap:8px 12px;align-items:start">
-    <span>${symWithName(e.sym)}</span>
-    <span style="font-size:12px">
-      ${srcBadge}
-      ${dpsLabel}
-      <span style="margin-left:6px;font-size:11px;color:var(--text-secondary)">Pay: ${payStr}</span>
-    </span>
-    <span style="font-size:12px;color:var(--text-secondary);white-space:nowrap">Ex: ${exStr}</span>
-    <span style="font-size:12px;white-space:nowrap;${urgency}">${daysAway}d</span>
-    <span style="font-weight:500;color:var(--green);white-space:nowrap">S$${fmt(e.grossSGD)}</span>
+  // Mirrors the YTD-received card layout exactly:
+  //   Ex date (fixed min-width, urgency colour) | Symbol+badge [flex:1] | DPS x shares | S$ amount | Pay date
+  // flex:1 only on the symbol/badge span so DPS, amount and pay date columns
+  // are always fully visible. Putting DPS inside the flex span caused clipping
+  // on narrow cards because the source badge ("dividends.sg") is wider than "paid".
+  const dpsDetail = e.dpsEstimated
+    ? `<span style="color:var(--text-secondary);margin-right:8px">${e.currency} ${e.dps.toFixed(4)} \xd7 ${fmt(e.sharesHeld)} <span style="font-size:10px;color:var(--amber)">(est.)</span></span>`
+    : `<span style="color:var(--text-secondary);margin-right:8px">${e.currency} ${e.dps.toFixed(4)} \xd7 ${fmt(e.sharesHeld)}</span>`;
+  return `<div class="div-entry">
+    <span style="min-width:78px;${urgency}">Ex ${exStr}</span>
+    <span style="flex:1">${symWithName(e.sym)} ${srcBadge}</span>
+    ${dpsDetail}
+    <span style="font-weight:500;color:var(--green)">S$${fmt(e.grossSGD)}</span>
+    <span style="min-width:82px;color:var(--text-secondary);text-align:right;padding-left:10px">Pay ${payStr}</span>
   </div>`;
 }
 
@@ -12287,16 +12317,32 @@ function renderAnnualDividendYield(historyRows) {
   }
 
   // ── Year-end cost basis ─────────────────────────────────────────
-  const txns = [...portfolio.transactions]
+  // Run applyCorpActions() so registered splits/bonus/rights adjust the WAC
+  // share denominator correctly on sells — without this, a pre-split buy lot
+  // has too few shares in runShares, making WAC removal over-deduct cost.
+  // Deliberately NO netSameDayTransactions: that function collapses same-day
+  // sell+rebuy pairs (e.g. the LAND 2017-09-28 return-of-capital rebase) into
+  // a zero-share fee row, dropping the cost rebasing and understating basis.
+  const txns = applyCorpActions([...portfolio.transactions].sort((a, b) => a.date - b.date))
     .filter(t => !t.isFee)
-    .sort((a, b) => a.date - b.date);
+    .sort((a, b) => {
+      const toDate = t => t.date instanceof Date ? t.date : new Date(t.date);
+      return toDate(a) - toDate(b);
+    });
 
   const years = [...new Set([
     ...Object.keys(incomeByYear).map(Number),
     ...txns.map(t => (t.date instanceof Date ? t.date : new Date(t.date)).getFullYear())
   ])].sort((a,b)=>a-b);
 
-  let runShares = 0, runCostSGD = 0;
+  // symState: per-symbol { shares, costSGD }. The previous code used a single
+  // global runShares/runCostSGD pool across all symbols — WAC on a sell of
+  // D05 was computed against total shares of every position combined, so the
+  // cost removed per sell share was almost nothing, leaving ~S$550k of cost
+  // that should have been eliminated still sitting in the pool and producing
+  // a wildly understated cost basis (~S$1.57M instead of ~S$2.12M).
+  // Fix: per-symbol WAC, identical to processPortfolio() in the Holdings tab.
+  const symState = {};
   let txnIdx = 0;
   const costByYear = {};
   const navByYear  = {};
@@ -12309,19 +12355,22 @@ function renderAnnualDividendYield(historyRows) {
       const t   = txns[txnIdx];
       const tDt = t.date instanceof Date ? t.date : new Date(t.date);
       if (tDt > snapDate) break;
+      if (!symState[t.sym]) symState[t.sym] = { shares: 0, costSGD: 0 };
+      const s = symState[t.sym];
       if (t.shares > 0) {
         const fx = getFxRate(t.ccy, tDt);
-        runCostSGD += (t.shares * t.price + t.fees) * fx;
-        runShares  += t.shares;
+        s.costSGD += (t.shares * t.price + t.fees) * fx;
+        s.shares  += t.shares;
       } else {
-        const sellSh = Math.min(Math.abs(t.shares), runShares);
-        const wacPS  = runShares > 0 ? runCostSGD / runShares : 0;
-        runCostSGD  -= sellSh * wacPS;
-        runShares   -= sellSh;
+        const sellSh = Math.min(Math.abs(t.shares), s.shares);
+        const wacPS  = s.shares > 0 ? s.costSGD / s.shares : 0;
+        s.costSGD   -= sellSh * wacPS;
+        s.shares    -= sellSh;
       }
       txnIdx++;
     }
-    costByYear[y] = Math.max(0, runCostSGD);
+    // Sum cost across all symbols that still have open shares
+    costByYear[y] = Object.values(symState).reduce((sum, s) => sum + Math.max(0, s.costSGD), 0);
 
     let navVal = null;
     for (let back = 0; back <= 7; back++) {
@@ -14339,7 +14388,7 @@ document.addEventListener('DOMContentLoaded', initApp);
 
 <!-- Upcoming ex-dividend dates — full list modal -->
 <div class="modal-overlay" id="upcoming-div-modal">
-  <div class="modal" style="max-width:520px">
+  <div class="modal" style="max-width:660px">
     <div class="modal-title">
       <span>Upcoming ex-dividend dates — full list</span>
       <button class="modal-close" onclick="closeModal('upcoming-div-modal')"><i class="ti ti-x"></i></button>
