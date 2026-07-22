@@ -13646,47 +13646,72 @@ function setDailyChangeRange(r, btn) {
 // ─── DEMO DATA ────────────────────────────────────────────────────────
 function loadDemo() {
   const txns = generateDemoData();
-  let demoId = Object.keys(pfRegistry).find(id => pfRegistry[id].name === 'Demo');
-  if (!demoId) demoId = createPortfolio('Demo');
+  let demoId = Object.keys(pfRegistry).find(id => pfRegistry[id].name === 'Demo_1-2026-07-20');
+  if (!demoId) demoId = createPortfolio('Demo_1-2026-07-20');
   setPfTransactions(demoId, txns);
   activePfIds = [demoId];
   saveActivePfIds();
+  // Seed the NVDA 10:1 split corp action that applies to the demo portfolio.
+  // Only adds if not already present (idempotent on repeated demo loads).
+  const nvdaSplit = { sym: 'NVDA', date: '2024-06-10', type: 'split', ratio: 10, notes: '10:1 Stock Split' };
+  const alreadySeeded = corporateActions.some(ca => ca.sym === 'NVDA' && ca.date === '2024-06-10' && ca.type === 'split');
+  if (!alreadySeeded) {
+    corporateActions.push(nvdaSplit);
+    try { localStorage.setItem('corporateActions', JSON.stringify(corporateActions)); } catch(e) {}
+  }
   renderPfBar();
   portfolio.transactions = getActiveTransactions();
   processPortfolio();
   switchTab('dashboard', 'dashboard');
-  toast('Demo data loaded — 12 positions across SGX, LSE & SSB', 'success');
-  showStatus('success', `Loaded ${txns.length} demo transactions — SGX stocks, REITs, bonds &amp; global ETFs`);
+  toast('Demo data loaded — 16 positions across SGX, NASDAQ, HKEX, LSE & KLSE', 'success');
+  showStatus('success', 'Loaded 30 demo transactions — SGX stocks &amp; REITs, US tech, HK &amp; Malaysian stocks, LSE');
   document.getElementById('btn-export').style.display = ''; document.getElementById('btn-full-backup').style.display = '';
 }
 
 function generateDemoData() {
-  const assets = [
-    {sym:'D05',   exch:'SGX', basePrice:32.5,  ccy:'SGD'},
-    {sym:'O39',   exch:'SGX', basePrice:14.2,  ccy:'SGD'},
-    {sym:'U11',   exch:'SGX', basePrice:28.1,  ccy:'SGD'},
-    {sym:'C6L',   exch:'SGX', basePrice:6.8,   ccy:'SGD'},
-    {sym:'Z74',   exch:'SGX', basePrice:2.4,   ccy:'SGD'},
-    {sym:'J36',   exch:'SGX', basePrice:1.85,  ccy:'SGD'},
-    {sym:'C38U',  exch:'SGX', basePrice:2.1,   ccy:'SGD'},
-    {sym:'M44U',  exch:'SGX', basePrice:1.65,  ccy:'SGD'},
-    {sym:'A17U',  exch:'SGX', basePrice:1.15,  ccy:'SGD'},
-    {sym:'IWDA',  exch:'LSE', basePrice:98.5,  ccy:'USD'},
-    {sym:'CSPX',  exch:'LSE', basePrice:520.0, ccy:'USD'},
-    {sym:'GS-SSB',exch:'SSB', basePrice:1.0,   ccy:'SGD'},
+  // Fixed demo portfolio — 30 transactions, 16 symbols across SGX/NASDAQ/HKEX/LSE/KLSE/NYSE.
+  // Includes buys and sells, and a NVDA 10:1 split (seeded separately into corporateActions).
+  // Replaces the old randomised generator which produced a different portfolio on every load
+  // and used synthetic SGX-only positions that didn't exercise multi-currency or corp-action paths.
+  const raw = [
+    {sym:'D05',     exch:'SGX',    date:'2021-07-29', shares:   500, price:  27.730, fees: 35, ccy:'SGD', action:'buy'},
+    {sym:'O9P',     exch:'SGX',    date:'2021-10-25', shares:  1000, price:   9.000, fees: 25, ccy:'USD', action:'buy'},
+    {sym:'D05',     exch:'SGX',    date:'2021-12-28', shares:  1000, price:  29.570, fees: 49, ccy:'SGD', action:'buy'},
+    {sym:'C2PU',    exch:'SGX',    date:'2022-03-03', shares: 10000, price:   4.610, fees: 78, ccy:'SGD', action:'buy'},
+    {sym:'T82U',    exch:'SGX',    date:'2022-03-04', shares:  5000, price:   1.620, fees: 40, ccy:'SGD', action:'buy'},
+    {sym:'T82U',    exch:'SGX',    date:'2022-07-04', shares:  2000, price:   1.610, fees: 39, ccy:'SGD', action:'buy'},
+    {sym:'AAPL',    exch:'NASDAQ', date:'2022-08-30', shares:   200, price: 162.560, fees: 89, ccy:'USD', action:'buy'},
+    {sym:'D05',     exch:'SGX',    date:'2022-09-12', shares:  1500, price:  30.390, fees: 48, ccy:'SGD', action:'buy'},
+    {sym:'Z74',     exch:'SGX',    date:'2023-02-22', shares:  5000, price:   2.420, fees: 30, ccy:'SGD', action:'buy'},
+    {sym:'D05',     exch:'SGX',    date:'2023-06-20', shares:  1000, price:  28.150, fees: 48, ccy:'SGD', action:'buy'},
+    {sym:'NVDA',    exch:'NASDAQ', date:'2023-12-07', shares:    20, price:  46.000, fees: 49, ccy:'USD', action:'buy'},
+    {sym:'0941',    exch:'HKEX',   date:'2024-04-16', shares:  2000, price:  67.500, fees: 50, ccy:'HKD', action:'buy'},
+    {sym:'5225.KL', exch:'KLSE',   date:'2024-04-18', shares:  5000, price:   6.090, fees: 65, ccy:'MYR', action:'buy'},
+    {sym:'NVDA',    exch:'NASDAQ', date:'2024-05-23', shares:    10, price: 101.000, fees: 80, ccy:'USD', action:'buy'},
+    {sym:'ES3',     exch:'SGX',    date:'2024-08-01', shares:  5000, price:   3.510, fees: 69, ccy:'SGD', action:'buy'},
+    {sym:'4197.KL', exch:'KLSE',   date:'2024-08-15', shares: 10000, price:   2.600, fees: 35, ccy:'MYR', action:'buy'},
+    {sym:'3988',    exch:'HKEX',   date:'2024-09-04', shares:  2000, price:   3.360, fees: 68, ccy:'HKD', action:'buy'},
+    {sym:'AAPL',    exch:'NASDAQ', date:'2024-10-30', shares:    10, price: 233.570, fees: 56, ccy:'USD', action:'buy'},
+    {sym:'A7RU',    exch:'SGX',    date:'2025-01-16', shares: 10000, price:   0.450, fees: 58, ccy:'SGD', action:'buy'},
+    {sym:'5225.KL', exch:'KLSE',   date:'2025-01-17', shares:  5000, price:   7.060, fees: 78, ccy:'MYR', action:'buy'},
+    {sym:'4197.KL', exch:'KLSE',   date:'2025-04-08', shares:  3000, price:   2.030, fees: 40, ccy:'MYR', action:'buy'},
+    {sym:'0941',    exch:'HKEX',   date:'2025-05-15', shares:  4000, price:  84.250, fees: 65, ccy:'HKD', action:'buy'},
+    {sym:'ME8U',    exch:'SGX',    date:'2025-07-22', shares:  1000, price:   2.050, fees: 68, ccy:'SGD', action:'buy'},
+    {sym:'O9P',     exch:'SGX',    date:'2025-08-15', shares:  -500, price:   6.750, fees: 39, ccy:'USD', action:'sell'},
+    {sym:'STAN',    exch:'LSE',    date:'2025-09-09', shares:  1000, price:  13.820, fees: 76, ccy:'GBP', action:'buy'},
+    {sym:'AAPL',    exch:'NASDAQ', date:'2026-03-05', shares:   -10, price: 260.000, fees: 69, ccy:'USD', action:'sell'},
+    {sym:'SHLD',    exch:'NYSE',   date:'2026-04-10', shares:   500, price:  76.540, fees: 58, ccy:'USD', action:'buy'},
+    {sym:'NVDA',    exch:'NASDAQ', date:'2026-04-30', shares:  -100, price: 198.700, fees: 40, ccy:'USD', action:'sell'},
+    {sym:'0941',    exch:'HKEX',   date:'2026-06-17', shares: -3000, price:  80.500, fees: 60, ccy:'HKD', action:'sell'},
+    {sym:'4197.KL', exch:'KLSE',   date:'2026-07-03', shares:-10000, price:   2.100, fees: 69, ccy:'MYR', action:'sell'},
   ];
-  const txns = []; const now = new Date();
-  assets.forEach(a => {
-    const numBuys = 2 + Math.floor(Math.random()*4);
-    for (let i=0;i<numBuys;i++) {
-      const daysAgo = 180 + Math.floor(Math.random()*5400); // up to ~15 years back
-      const date    = new Date(Math.max(now - daysAgo*86400000, new Date('2009-01-01')));
-      const shares  = a.sym.includes('SSB') ? 5000+Math.floor(Math.random()*10)*1000 : a.exch==='LSE' ? 10+Math.floor(Math.random()*20) : 500+Math.floor(Math.random()*2000);
-      const price   = a.basePrice*(0.85+Math.random()*0.3);
-      txns.push({ sym:a.sym, exch:a.exch, date, shares, price, fees:Math.round(price*shares*0.003*100)/100, ccy:a.ccy, isFee:false, action:'buy', notes:'' });
-    }
-  });
-  return txns.sort((a,b)=>a.date-b.date);
+  return raw.map(t => ({
+    ...t,
+    date:   new Date(t.date + 'T00:00:00.000Z'),
+    isFee:  false,
+    notes:  '',
+    total:  0,
+  }));
 }
 
 // ─── IMPORT TAB HELPERS ───────────────────────────────────────────────
@@ -13889,8 +13914,8 @@ function _renderStockDetail(sym, exch) {
       data: {
         datasets: [
           { label: 'Price', data: priceData, borderColor: '#1D9E75', borderWidth: 1.5, pointRadius: 0, fill: true, backgroundColor: 'rgba(29,158,117,0.06)', tension: 0.2, yAxisID: 'y' },
-          { label: 'Buys',  data: buyPoints,  type: 'scatter', pointStyle: 'triangle', pointRadius: 7, backgroundColor: '#1D9E75', borderColor: '#fff', borderWidth: 1, yAxisID: 'y' },
-          { label: 'Sells', data: sellPoints, type: 'scatter', pointStyle: 'triangle', rotation: 180, pointRadius: 7, backgroundColor: '#E24B4A', borderColor: '#fff', borderWidth: 1, yAxisID: 'y' },
+          { label: 'Buys',  data: buyPoints,  type: 'scatter', pointStyle: 'triangle', pointRadius: 7, backgroundColor: '#1D9E75', borderColor: '#0F6E56', borderWidth: 1.5, yAxisID: 'y' },
+          { label: 'Sells', data: sellPoints, type: 'scatter', pointStyle: 'triangle', rotation: 180, pointRadius: 7, backgroundColor: '#E24B4A', borderColor: '#9B1B1B', borderWidth: 1.5, yAxisID: 'y' },
         ]
       },
       options: {
@@ -14028,10 +14053,10 @@ function _renderStockDetail(sym, exch) {
     return `<tr>
       <td style="color:var(--text-secondary);white-space:nowrap">${t.date.toISOString().slice(0,10)}</td>
       <td>${typePill}</td>
-      <td style="text-align:right">${isBuy ? '' : '-'}${shares.toLocaleString('en-SG',{maximumFractionDigits:0})}</td>
+      <td style="text-align:right${isBuy ? '' : ';color:var(--red)'}">${isBuy ? '' : '-'}${shares.toLocaleString('en-SG',{maximumFractionDigits:0})}</td>
       <td style="text-align:right;color:var(--text-secondary)">${ccy} ${t.price.toFixed(3)}</td>
       <td style="text-align:right;color:var(--text-secondary)">${localCell}</td>
-      <td style="text-align:right">${isBuy ? '' : '-'}S$${fmt(valSGD)}</td>
+      <td style="text-align:right${isBuy ? '' : ';color:var(--red)'}">${isBuy ? '' : '-'}S$${fmt(valSGD)}</td>
       <td style="text-align:right">${gainLocalCell}</td>
       <td style="text-align:right">${gainSGDCell}</td>
       <td style="text-align:right">${feesStr}</td>
@@ -14046,7 +14071,10 @@ function _renderStockDetail(sym, exch) {
   const gainTotCls = totGainSGD >= 0 ? 'up' : 'down';
   document.getElementById('sd-realised-foot').innerHTML = `<tr>
     <td colspan="2" style="font-weight:600">${txnsSorted.length} transaction${txnsSorted.length!==1?'s':''}</td>
-    <td style="text-align:right;font-weight:600;color:var(--green)">${totBuyShares.toLocaleString('en-SG',{maximumFractionDigits:0})} bought</td>
+    <td style="text-align:right;font-weight:600">
+      <span style="color:var(--green)">${totBuyShares.toLocaleString('en-SG',{maximumFractionDigits:0})} bought</span>
+      ${totSellShares > 0 ? `<span style="color:var(--text-secondary);margin:0 4px">/</span><span style="color:var(--red)">-${totSellShares.toLocaleString('en-SG',{maximumFractionDigits:0})} sold</span>` : ''}
+    </td>
     <td></td>
     <td style="text-align:right;font-weight:600;color:var(--text-secondary)">${hasFxTxn
       ? `+${ccy} ${fmt(totBuyLocal)} / -${ccy} ${fmt(totSellLocal)}`
