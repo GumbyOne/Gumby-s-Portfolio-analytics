@@ -4,7 +4,6 @@ A self-contained, single-file portfolio analytics dashboard built for long-term,
 multi-exchange investors. No installation, no backend, no account required — open
 the page, import a CSV, and get a full picture of your portfolio.
 
-**[→ Open the live app](https://gumbyone.github.io/Gumby-s-Portfolio-analytics/)**
 **[→ Feature overview](https://gumbyone.github.io/Gumby-s-Portfolio-analytics/feature-sheet.html)**
 ---
 
