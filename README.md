@@ -1,120 +1,123 @@
 # Portfolio Analytics
 
-A self-contained, single-file portfolio analytics dashboard for multi-exchange dividend investors. No install, no backend, no account — open the page, import your CSV, and get a full performance, risk, and dividend breakdown.
+A self-contained, single-file portfolio analytics dashboard built for long-term,
+multi-exchange investors. No installation, no backend, no account required — open
+the page, import a CSV, and get a full picture of your portfolio.
 
-**Live demo:** [gumbyone.github.io/Gumby-s-Portfolio-analytics](https://gumbyone.github.io/Gumby-s-Portfolio-analytics/)
+**[→ Open the live app](https://gumbyone.github.io/Gumby-s-Portfolio-analytics/)**
+
+---
+
+## What it does
+
+Portfolio Analytics is a browser-based tool that turns a CSV of your transaction
+history into a comprehensive investment dashboard. Prices and dividends are fetched
+live from Yahoo Finance each session. Everything else — NAV, P&L, returns, risk
+metrics, dividend income — is calculated in your browser from your own data.
 
 ---
 
 ## Features
 
-### Dashboard
-- Portfolio NAV with interactive time-range selector (1M / 3M / 6M / YTD / 1Y / All)
-- KPI cards: NAV, XIRR, TWR, day change (with ES3 benchmark reference), capital P&L, dividend YTD, projected year-end income, trailing 12-month dividends
-- Daily value change bar chart with top gainers and losers
-- Asset allocation doughnut and sector exposure breakdown
+### 📊 Dashboard
+- Portfolio NAV over time with range controls (1M / 3M / 6M / YTD / 1Y / All)
+- Unrealised P&L, day change (vs. prior session close), and position count
+- Asset allocation donut and sector exposure bar chart
+- Dividend income KPIs: YTD received, projected to year-end, yield on cost
 
-### Holdings
-- Combined holdings table with EOD closing prices from Yahoo Finance
-- Per-position: shares, average cost, EOD close (color-coded green/red), day change in SGD and %, value, P&L, return %, weight
-- Filter by type (Stock / ETF / REIT / Bond), sort by weight, day change %, P&L, return, or symbol
-- Search by symbol or name
-- Click any symbol for a detailed overlay with price chart, dividend history, and transaction log
+### 💼 Holdings
+- All open positions with shares, average cost, current price, SGD value, P&L and weight
+- Filter by asset type (Stock / ETF / REIT / Bond) and sort by weight, P&L, or return %
+- Exchange-aware EOD pricing — SGX, HKEX, KLSE, LSE, NYSE, NASDAQ
 
-### Performance
-- Sharpe ratio, Sortino ratio, CAGR, alpha/beta vs ES3 benchmark
-- TWR (time-weighted return) with proper chain-link methodology
-- XIRR (cash-flow-weighted) for both portfolio and ES3 switch-fund comparison
-- Portfolio vs benchmark cumulative return chart (rebased to 100)
-- Monthly returns heatmap and per-position return attribution
+### 📈 Performance
+- **TWR** (time-weighted return) and **XIRR** (money-weighted) since inception
+- CAGR derived from TWR, Sharpe ratio, Sortino ratio, Calmar ratio, Beta, win rate
+- Benchmark comparison vs. ES3 (STI ETF) with switch-fund XIRR, TWR diff, tracking error and information ratio
+- Monthly returns heatmap (colour-coded, scrollable)
+- Per-position performance attribution chart
 
-### Risk & Drawdown
-- Drawdown-from-peak chart
-- Annualised volatility, VaR (95%), CVaR / expected shortfall, max drawdown
-- Daily return distribution histogram
-- Rolling 30-day volatility chart
+### 🛡️ Risk & Drawdown
+- Drawdown-from-peak chart over full history
+- Daily VaR (95%) and CVaR / expected shortfall
+- Return distribution histogram
+- Rolling 30-day annualised volatility chart
 
-### Dividends
-- Dividend calendar with upcoming ex-dates (sourced from dividends.sg for SGX)
-- Historical dividend timeline and per-position breakdown
-- YTD received vs projected year-end income
-- Manual dividend declarations for positions not covered by Yahoo Finance
+### 🥧 Exposure & Analysis
+- Breakdowns by asset type, exchange, and currency (live-recomputed in SGD)
+- Concentration chart — top 10 positions by weight
+- Full currency detail with FX rates
 
-### Exposure
-- Breakdowns by asset type, exchange, and currency (with live FX conversion to SGD)
-- Concentration chart for top 10 positions
-- Portfolio summary with current/closed position filtering and per-ticker drill-down
+### 💰 Dividends
+- Full dividend history per position and across the portfolio
+- YTD income, projected year-end total, trailing 12-month chart
+- Yield on cost (forward-looking, per position and aggregate)
+- Annual income CAGR
+- Upcoming ex-dates for SGX holdings (via dividends.sg)
+- Manual dividend declaration entry for non-SGX holdings
+- DRIP (dividend reinvestment) support
 
-### Additional Features
-- Multi-portfolio support with independent naming and segmentation
-- Price and FX rate caching in localStorage with smart compression
-- Three-tier CORS proxy fallback chain for Yahoo Finance fetches
-- Manual price overrides for unlisted securities (e.g. Astrea bonds)
-- Corporate actions tracking (stock splits, consolidations)
-- Export/import full backup as JSON, auto-backup to a designated folder
-- Transaction history with editable entries and CSV re-export
+### 📋 Transactions
+- Full transaction log with search, filter, and sort
+- Add, edit, or delete individual transactions in-app
+- Net cash flow chart
+
+### 💹 Realised P&L
+- Closed position summary with cost basis, proceeds, and return %
+- Realised gain/loss history chart
+
+### ⚙️ Corp Actions
+- Manual entry for splits, mergers, rights issues, and MCB redemptions
+- Applied automatically on every load
+
+### 🔔 Alerts
+- Price alerts on any holding — fires a notification when the threshold is crossed
+
+### 📱 Mobile Snapshot (PWA)
+- QR code generated from the desktop app encodes a holdings snapshot
+- Mobile viewer live-fetches prices and FX on open — NAV, P&L, day change always current
+- Works as a home screen app on iOS and Android
 
 ---
 
-## Getting Started
+## Getting started
 
 ### Try it instantly
-Click **Load demo** on the [live demo](https://gumbyone.github.io/Gumby-s-Portfolio-analytics/) — no file needed.
+Open the [live app](https://gumbyone.github.io/Gumby-s-Portfolio-analytics/) and click
+**Load demo** — no file needed.
 
-### Use your own data
+### Import your own data
 
-1. Prepare a CSV file with your transaction history (see format below)
-2. Open the app and go to the **Import** tab
-3. Drop your CSV/TSV file or click **Browse file**
-4. Click **Fetch Prices** to pull live EOD data from Yahoo Finance
+**Option A — Export from your broker or portfolio tracker**  
+If your broker or tracker exports transactions as CSV, check that it includes at
+minimum a `symbol` and `date` column.
 
-#### CSV format
+**Option B — Build your own spreadsheet**  
+Create a spreadsheet in Excel or Google Sheets with these columns, save as CSV, and
+import via the Import tab:
 
-Your CSV needs a header row followed by one row per transaction:
-
-```csv
-action,exchange,symbol,date,shares,price,fees,currency,notes
-Buy,SGX,D05,15/03/2020,500,20.50,25.00,SGD,DBS accumulate
-Buy,SGX,C38U,10/06/2021,2000,2.15,12.80,SGD,CapitaLand Integrated
-Sell,SGX,D05,02/01/2023,200,35.80,25.00,SGD,Partial profit taking
-Buy,LSE,IWDA,18/07/2022,50,68.30,15.00,USD,iShares World ETF
-Buy,HKEX,3988,05/09/2023,1000,3.45,50.00,HKD,Bank of China
-Buy,NYSE,AAPL,12/11/2023,10,185.50,5.00,USD,Apple
+```
+action, exchange, symbol, date, shares, price, fees, currency, notes
 ```
 
-A blank template CSV (`demo-portfolio.csv`) is included in this repo — download it, fill in your own transactions, and import.
+| Column | Required | Notes |
+|--------|----------|-------|
+| `symbol` | ✓ | Ticker as listed on the exchange (e.g. `D05`, `AAPL`) |
+| `date` | ✓ | `YYYY-MM-DD`, `DD/MM/YYYY`, or `DD.MM.YYYY` |
+| `action` | | `Buy` or `Sell` — defaults to `Buy` |
+| `exchange` | | `SGX`, `HKEX`, `NYSE`, `NASDAQ`, `LSE`, `KLSE`, `SSB` — defaults to `SGX` |
+| `shares` | | Number of units |
+| `price` | | Price per unit in the transaction currency |
+| `fees` | | Brokerage/commission fees |
+| `currency` | | `SGD`, `USD`, `HKD`, `GBP`, `MYR` etc. — defaults to `SGD` |
+| `notes` | | Free text, optional |
 
-| Field | Values |
-|-------|--------|
-| `action` | `Buy` / `Sell` / `1` / `-1` / `Fees` / `0` |
-| `exchange` | `SGX`, `HKEX`, `NYSE`, `NASDAQ`, `LSE`, `KLSE`, `SSB`, etc. |
-| `date` | `YYYY-MM-DD`, `DD/MM/YYYY`, or `DD.MM.YYYY` |
-| `currency` | `SGD`, `USD`, `HKD`, `GBP`, `EUR`, `MYR`, etc. |
+A **blank template CSV** is available directly in the Import tab — click
+*Download blank template*, fill it in, and import.
 
----
+### Run locally
 
-## Your Data Never Leaves Your Browser
-
-This app has **no backend and no analytics**. Your transaction data is parsed and held entirely in browser memory and `localStorage` on your own machine. The only outbound network calls are to Yahoo Finance (for prices and dividends) and dividends.sg (for SGX upcoming ex-dates) — nothing about your holdings or transactions is ever sent anywhere else.
-
----
-
-## How Prices Are Fetched
-
-Prices and dividend history come from Yahoo Finance's public chart endpoint. Since Yahoo doesn't serve CORS headers for direct browser requests, the app routes through a chain of public CORS proxies (tried in order until one succeeds), then falls back to a locally cached copy if every proxy is temporarily unavailable.
-
-If you're running this behind restrictive antivirus or firewall software, you may need to whitelist:
-
-- `query1.finance.yahoo.com` / `query2.finance.yahoo.com`
-- `corsproxy.io`
-- `api.allorigins.win`
-- `api.codetabs.com`
-
----
-
-## Running Locally
-
-It's a single HTML file — no build step, no dependencies to install.
+It's a single HTML file — no build step, no dependencies to install:
 
 ```bash
 git clone https://github.com/GumbyOne/Gumby-s-Portfolio-analytics.git
@@ -122,40 +125,99 @@ cd Gumby-s-Portfolio-analytics
 python3 -m http.server 8080
 ```
 
-Then open [http://localhost:8080](http://localhost:8080).
+Then open `http://localhost:8080` in your browser.
+
+> **Note:** A local HTTP server is needed (rather than opening the file directly)
+> because browsers block cross-origin requests from `file://` URLs. Any static
+> server works — Python's built-in one is the simplest option.
+
+---
+
+## Supported exchanges
+
+| Exchange | Suffix on Yahoo Finance | Currency |
+|----------|------------------------|----------|
+| SGX | `.SI` | SGD |
+| HKEX | `.HK` | HKD |
+| KLSE | `.KL` | MYR |
+| LSE | `.L` | GBP |
+| NYSE / NASDAQ | *(no suffix)* | USD |
+| SSB / Bonds | *(no Yahoo data — held at cost)* | SGD |
+
+Reference currency is SGD. Historical FX rates are fetched from Yahoo Finance for
+accurate cost basis conversion across all currencies.
+
+---
+
+## Your data stays in your browser
+
+This app has no backend and no analytics. Your transaction history is parsed and
+held entirely in your browser's memory and `localStorage`. The only outbound network
+calls are:
+
+- **Yahoo Finance** — live prices, dividend history, and historical FX rates
+- **dividends.sg** — upcoming SGX ex-dates
+
+Nothing about your holdings, transactions, or identity is ever sent anywhere else.
+
+If you run behind restrictive antivirus or firewall software, you may need to
+whitelist:
+
+```
+query1.finance.yahoo.com
+query2.finance.yahoo.com
+corsproxy.io
+api.allorigins.win
+api.codetabs.com
+dividends.sg
+```
+
+---
+
+## How prices are fetched
+
+Prices and dividend history come from Yahoo Finance's public chart API. Since Yahoo
+doesn't serve CORS headers for direct browser requests, the app routes through a
+chain of public CORS proxies (tried in order until one responds). If all proxies
+are temporarily unavailable, the app falls back to a locally cached copy of the
+last successful fetch rather than failing outright.
+
+Price data is cached in `localStorage` between sessions and compacted automatically
+to stay within the browser's ~5MB storage limit.
 
 ---
 
 ## Tech
 
-Vanilla HTML/CSS/JS and [Chart.js](https://www.chartjs.org/) — no framework, no bundler, no package.json. Everything lives in one file by design, so it can be opened, read, and modified without any tooling.
+- Vanilla HTML / CSS / JavaScript — no framework, no bundler, no `package.json`
+- [Chart.js](https://www.chartjs.org/) for all charts
+- [Tabler Icons](https://tabler.io/icons) for iconography
+- [qrcode-generator](https://github.com/kazuhikoarase/qrcode-generator) for the mobile QR snapshot
 
----
-
-## Supported Exchanges
-
-| Exchange | Suffix | Currency |
-|----------|--------|----------|
-| SGX (Singapore) | `.SI` | SGD |
-| HKEX (Hong Kong) | `.HK` | HKD |
-| NYSE (New York) | — | USD |
-| NASDAQ | — | USD |
-| LSE (London) | `.L` | GBP |
-| KLSE (Kuala Lumpur) | `.KL` | MYR |
-| Euronext Amsterdam | `.AS` | EUR |
-| SSB (Singapore Savings Bonds) | — | SGD |
+Everything lives in one file by design — it can be opened, read, and modified
+without any tooling.
 
 ---
 
 ## Limitations
 
-- Live prices depend on free public data sources and proxies; during an outage, the app falls back to cached or last-known transaction prices rather than failing outright.
-- LSE prices from Yahoo Finance are returned in pence (GBp) and automatically normalised to GBP.
-- Yahoo Finance does not provide data for some delisted tickers or unlisted bonds — use the manual price override feature for these.
-- This is a personal analytics tool, not financial advice. Verify anything decision-relevant against your broker's own statements.
+- Live prices depend on free public data sources and CORS proxies. During an outage
+  the app falls back to cached data rather than failing, but prices may be one
+  session stale.
+- Benchmark comparison uses ES3 (Nikko STI ETF) with dividend history sourced from
+  Yahoo Finance and supplementary SSGA data. Pre-2013 dividend coverage is patched
+  manually.
+- This is a personal analytics tool, not financial advice. Always verify
+  decision-relevant figures against your broker's own statements.
 
 ---
 
 ## License
 
-*Not yet licensed for reuse. Please ask before forking for anything beyond personal use.*
+Copyright (c) 2026 GumbyOne
+
+The source code is made available for **personal, non-commercial use only**.  
+You may view, run, and modify the code for your own personal use.  
+You may not redistribute, sublicense, publish modified versions, or use this code
+(in whole or in part) in any commercial product or service without explicit written
+permission from the author.
