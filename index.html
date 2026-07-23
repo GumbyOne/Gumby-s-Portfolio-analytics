@@ -1751,8 +1751,8 @@
     <div id="tab-import" class="hidden">
       <div class="import-zone" id="drop-zone" onclick="document.getElementById('csv-input').click()" ondragover="handleDragOver(event)" ondragleave="handleDragLeave(event)" ondrop="handleDrop(event)">
         <i class="ti ti-file-spreadsheet"></i>
-        <h3 style="font-size:15px;font-weight:500;margin-bottom:6px">Drop your StocksCafe CSV here</h3>
-        <p style="font-size:13px;color:var(--text-secondary)">Or click to browse. Supports CSV and TSV exports from StocksCafe.</p>
+        <h3 style="font-size:15px;font-weight:500;margin-bottom:6px">Drop your transaction CSV here</h3>
+        <p style="font-size:13px;color:var(--text-secondary)">Your own spreadsheet saved as CSV, or any compatible broker export.</p>
         <input id="csv-input" type="file" accept=".csv,.tsv" style="display:none" onchange="handleFile(this)">
         <div style="margin-top:16px;display:flex;gap:8px;justify-content:center;flex-wrap:wrap;align-items:center">
           <div style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--text-secondary)">
@@ -1771,13 +1771,24 @@
         </div>
       </div>
       <div class="format-hint">
-        <strong>Expected StocksCafe export format (CSV or TSV):</strong><br><br>
-        <code>action, exchange, symbol, date, shares, price, fees, currency, notes</code><br><br>
-        Action values: <code>Buy</code> / <code>Sell</code> / <code>1</code> / <code>-1</code> / <code>Fees</code> / <code>0</code><br>
-        Exchanges: <code>SGX</code>, <code>HKEX</code>, <code>NYSE</code>, <code>NASDAQ</code>, <code>LSE</code>, <code>SSB</code>, etc.<br>
-        Date formats: <code>YYYY-MM-DD</code>, <code>DD/MM/YYYY</code>, <code>DD.MM.YYYY</code><br><br>
-        <strong>How to export from StocksCafe:</strong> Portfolio → Transactions → Export Transactions (bottom of page).<br><br>
-        <strong>Note:</strong> Prices shown are estimated from your last transaction price. For live prices, a market data API can be integrated.<br>
+
+        <strong>Option A — Export from your broker or portfolio tracker</strong><br>
+        If your broker or tracker can export transactions as CSV, check that it includes at minimum a symbol and date column. You may need to rename columns to match the format below.<br><br>
+
+        <strong>Option B — Build your own spreadsheet</strong><br>
+        Create a spreadsheet in Excel or Google Sheets with these columns, save as CSV, and import:<br><br>
+        <code>action</code> &nbsp;<code>exchange</code> &nbsp;<code>symbol</code> &nbsp;<code>date</code> &nbsp;<code>shares</code> &nbsp;<code>price</code> &nbsp;<code>fees</code> &nbsp;<code>currency</code> &nbsp;<code>notes</code><br><br>
+        Only <code>symbol</code> and <code>date</code> are required — all other columns default sensibly (exchange → SGX, currency → SGD, action → Buy, fees → 0).<br><br>
+        <span style="display:inline-flex;align-items:center;gap:6px;flex-wrap:wrap">
+          <strong>Action:</strong> <code>Buy</code> or <code>Sell</code> &nbsp;·&nbsp;
+          <strong>Date:</strong> <code>YYYY-MM-DD</code>, <code>DD/MM/YYYY</code>, or <code>DD.MM.YYYY</code> &nbsp;·&nbsp;
+          <strong>Exchange:</strong> <code>SGX</code> <code>HKEX</code> <code>NYSE</code> <code>NASDAQ</code> <code>LSE</code> <code>KLSE</code> <code>SSB</code>
+        </span><br><br>
+        <button class="btn-secondary" style="font-size:11px;padding:4px 10px" onclick="downloadCSVTemplate()">
+          <i class="ti ti-download" style="font-size:11px;margin-right:4px"></i>Download blank template
+        </button>
+        <span style="font-size:11px;color:var(--text-secondary);margin-left:8px">CSV with example rows — open in Excel or Sheets, replace with your own data, import here.</span><br><br>
+
         <strong>Keyboard shortcuts:</strong> <kbd>D</kbd> Dashboard &nbsp; <kbd>H</kbd> Holdings &nbsp; <kbd>T</kbd> Transactions &nbsp; <kbd>A</kbd> Alerts &nbsp; <kbd>?</kbd> Help
       </div>
       <div id="parse-status" style="margin-top:12px"></div>
@@ -2347,7 +2358,7 @@ function parseDate(s) {
 }
 
 function parseCSV(text, filename) {
-  const lines = text.trim().split('\n').filter(l => l.trim());
+  const lines = text.trim().split('\n').filter(l => l.trim() && !l.trim().startsWith('#'));
   if (lines.length < 2) { showStatus('error','File appears empty or has only a header row.'); return; }
 
   // Detect separator: tab takes priority, then comma
@@ -13213,6 +13224,41 @@ function downloadCSVText(text, filename) {
   // rather than in each calling function individually, guarantees it's
   // captured exactly once per real download regardless of entry point.
   try { localStorage.setItem(LAST_EXPORT_KEY, String(Date.now())); } catch {}
+}
+
+// Download a blank CSV template with header + annotated example rows so new
+// users have a working starting point to fill in their own transactions.
+// Uses the same column order as EXPORT_CSV_HEADER so the template imports
+// cleanly and round-trips correctly. classification/net_cash_flow columns are
+// included (they're part of the header) but left blank in examples — they're
+// an advanced annotation not needed for basic use.
+function downloadCSVTemplate() {
+  const header = 'action,exchange,symbol,date,shares,price,fees,currency,notes,classification,net_cash_flow';
+  const examples = [
+    // SGX stock buy
+    'Buy,SGX,D05,2023-01-15,200,32.50,25.00,SGD,,,',
+    // HKEX stock buy
+    'Buy,HKEX,9988,2023-03-20,500,82.00,50.00,HKD,,,',
+    // LSE ETF buy
+    'Buy,LSE,IWDA,2023-06-01,10,92.40,12.00,USD,,,',
+    // NYSE stock buy
+    'Buy,NYSE,MSFT,2023-09-10,5,315.00,8.00,USD,,,',
+    // SGX partial sell
+    'Sell,SGX,D05,2024-04-03,100,35.20,18.00,SGD,,,',
+    // SSB (Singapore Savings Bond) — use price 1.00, shares = face value in dollars
+    'Buy,SSB,GS-SSB,2023-07-01,10000,1.00,0.00,SGD,,,',
+  ];
+  const note = [
+    '# PORTFOLIO ANALYTICS — TRANSACTION TEMPLATE',
+    '# Delete these comment lines and the example rows before importing.',
+    '# Required columns: symbol, date.',
+    '# Optional columns (defaults): action=Buy, exchange=SGX, shares=0, price=0, fees=0, currency=SGD.',
+    '# Supported exchanges: SGX, HKEX, NYSE, NASDAQ, LSE, KLSE, SSB.',
+    '# Date formats: YYYY-MM-DD  or  DD/MM/YYYY  or  DD.MM.YYYY.',
+    '#',
+  ].join('\n');
+  downloadCSVText([note, header, ...examples].join('\n'), 'portfolio-template.csv');
+  toast('Template downloaded — open in Excel or Sheets, fill in your transactions, then import here.', 'success');
 }
 
 function checkBackupReminder() {
