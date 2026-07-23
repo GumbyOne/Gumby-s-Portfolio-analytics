@@ -5,7 +5,7 @@ multi-exchange investors. No installation, no backend, no account required — o
 the page, import a CSV, and get a full picture of your portfolio.
 
 **[→ Open the live app](https://gumbyone.github.io/Gumby-s-Portfolio-analytics/)**
-
+**[→ Feature overview](https://gumbyone.github.io/Gumby-s-Portfolio-analytics/feature-sheet.html)**
 ---
 
 ## What it does
