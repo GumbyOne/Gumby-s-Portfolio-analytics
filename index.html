@@ -3693,8 +3693,30 @@ async function fetchPricesForTicker(ticker, fromDate) {
     }
 
     // Strip bars dated today (incomplete intraday).
-    const todayUTC = new Date().toISOString().slice(0, 10);
-    while (dates.length > 0 && dates[dates.length - 1].toISOString().slice(0, 10) === todayUTC) {
+    // "Today" must be evaluated in the exchange's local timezone, not UTC.
+    // Using UTC causes a 9-hour window each SGX/HKEX/KLSE trading day (00:00–09:00 UTC)
+    // where the previous session's settled close shares the same UTC date string as
+    // "today" and gets incorrectly stripped — leaving T-2 as the apparent T-1 close.
+    // The regularMarketPrice rescue path fails simultaneously because rmpDate also
+    // equals todayUTC, suppressing the injection/patch branch.
+    //
+    // Fix: derive "today" from the exchange's UTC offset so the date boundary
+    // matches the trading calendar the exchange actually operates on.
+    //   SGX / HKEX / KLSE  UTC+8  (bars stamp at 00:00 UTC = same calendar day)
+    //   LSE                 UTC+1  (BST; conservative — same as GMT in winter)
+    //   NYSE / NASDAQ       UTC-4  (EDT; conservative — same as EST in winter)
+    //   FX pairs / fallback UTC+0
+    const EXCH_UTC_OFFSET_H = (() => {
+      if (/\.SI$|\.KL$|\.HK$/.test(ticker)) return 8;   // SGX, KLSE, HKEX
+      if (/\.L$/.test(ticker))               return 1;   // LSE
+      if (/^[A-Z0-9-]+$/.test(ticker))      return -4;  // NYSE/NASDAQ (no suffix)
+      return 0;
+    })();
+    const todayForExch = (() => {
+      const offsetMs = EXCH_UTC_OFFSET_H * 3600000;
+      return new Date(Date.now() + offsetMs).toISOString().slice(0, 10);
+    })();
+    while (dates.length > 0 && dates[dates.length - 1].toISOString().slice(0, 10) === todayForExch) {
       dates.pop();
       cleanCloses.pop();
     }
@@ -3709,7 +3731,7 @@ async function fetchPricesForTicker(ticker, fromDate) {
     if (regularMarketPrice != null && regularMarketTime != null) {
       const rmpDate     = new Date(regularMarketTime * 1000).toISOString().slice(0, 10);
       const lastBarDate = dates[dates.length - 1].toISOString().slice(0, 10);
-      if (rmpDate !== todayUTC) {
+      if (rmpDate !== todayForExch) {
         if (rmpDate > lastBarDate) {
           // T-1 bar missing from array (e.g. NYSE lag) — inject it
           dates.push(new Date(regularMarketTime * 1000));
