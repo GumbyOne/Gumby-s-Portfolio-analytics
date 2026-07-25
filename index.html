@@ -1013,8 +1013,11 @@
         <div id="holdings-footer" style="padding:10px 0 2px;font-size:12px;color:var(--text-secondary);display:flex;justify-content:space-between;flex-wrap:wrap;gap:8px"></div>
       </div>
 
-      <!-- 3. EOD PRICE TABLE — merged into Current Holdings above -->
-      <div class="chart-card" id="eod-price-card" style="display:none">>
+      <!-- 3. EOD PRICE TABLE — price/day-chg columns are also on the main
+           Holdings table above, but this is the only place that flags a
+           holding's own EOD date when it lags the portfolio-wide majority
+           date (see the "N pending" / "N excluded" counts elsewhere). -->
+      <div class="chart-card" id="eod-price-card" style="display:none">
         <div class="section-header">
           <span class="section-title">
             EOD closing prices
@@ -3706,31 +3709,65 @@ async function fetchPricesForTicker(ticker, fromDate) {
       return { dates:[], closes:[], currency:'', ok:false };
     }
 
-    // Strip bars dated today (incomplete intraday).
-    // "Today" must be evaluated in the exchange's local timezone, not UTC.
-    // Using UTC causes a 9-hour window each SGX/HKEX/KLSE trading day (00:00–09:00 UTC)
-    // where the previous session's settled close shares the same UTC date string as
-    // "today" and gets incorrectly stripped — leaving T-2 as the apparent T-1 close.
-    // The regularMarketPrice rescue path fails simultaneously because rmpDate also
-    // equals todayUTC, suppressing the injection/patch branch.
+    // Strip bars dated today IF today's session for this exchange hasn't
+    // actually SETTLED yet (incomplete intraday). "Today" and "settled" are
+    // two different questions and must be evaluated separately:
+    //   - "Today" = the exchange's current local calendar date (from its UTC
+    //     offset) — what a bar's date is compared against.
+    //   - "Settled" = whether that exchange's market has actually closed for
+    //     the day yet — a specific wall-clock time, not local midnight.
+    // An earlier fix compared bar dates against the exchange's local calendar
+    // date instead of raw UTC, which correctly closed a 9-hour SGX/HKEX/KLSE
+    // window (00:00-09:00 UTC) where the prior session's settled close shared
+    // "today"'s UTC date string and got incorrectly stripped. But calendar
+    // date alone still isn't enough: local midnight and local market close
+    // are hours apart. NASDAQ closes 16:00 ET but its calendar date doesn't
+    // roll over until 00:00 ET (8h later = 04:00-12:00 SGT the next viewing
+    // day) — during that window an already-fully-settled same-day bar was
+    // still being treated as "today, still forming" and stripped, and the
+    // regularMarketPrice rescue below was skipped for the identical reason
+    // (both used the same date-only comparison), so nothing restored it.
+    // Fixed 2026-07-25, confirmed via live diagnostic: SHLD's T-1 was stuck
+    // at 2026-07-23 while regularMarketTime's own settled date was already
+    // 2026-07-24 — the console log printed both, straight from the app.
     //
-    // Fix: derive "today" from the exchange's UTC offset so the date boundary
-    // matches the trading calendar the exchange actually operates on.
-    //   SGX / HKEX / KLSE  UTC+8  (bars stamp at 00:00 UTC = same calendar day)
-    //   LSE                 UTC+1  (BST; conservative — same as GMT in winter)
-    //   NYSE / NASDAQ       UTC-4  (EDT; conservative — same as EST in winter)
-    //   FX pairs / fallback UTC+0
+    // Fix: track BOTH the exchange's current local date (todayForExch) AND
+    // whether that date's session is past its actual close time yet
+    // (todaySettled), using each exchange's real closing hour rather than
+    // just its UTC offset. A same-day bar is only stripped/distrusted while
+    // todaySettled is false; once past the close (+ a buffer for Yahoo's
+    // data-posting lag), that day's data is final regardless of whether
+    // local midnight has happened yet.
+    //   SGX / KLSE   UTC+8, closes 17:00 local
+    //   HKEX         UTC+8, closes 16:00 local
+    //   LSE          UTC+1 (BST; conservative), closes 16:30 local
+    //   NYSE/NASDAQ  UTC-4 (EDT; conservative), closes 16:00 local
+    //   FX pairs / fallback — no defined close; close hour of 24 keeps the
+    //   old date-only (never-settled-same-day) behaviour for these.
     const EXCH_UTC_OFFSET_H = (() => {
       if (/\.SI$|\.KL$|\.HK$/.test(ticker)) return 8;   // SGX, KLSE, HKEX
       if (/\.L$/.test(ticker))               return 1;   // LSE
       if (/^[A-Z0-9-]+$/.test(ticker))      return -4;  // NYSE/NASDAQ (no suffix)
       return 0;
     })();
+    const EXCH_CLOSE_LOCAL_HOUR = (() => {
+      if (/\.SI$|\.KL$/.test(ticker)) return 17;    // SGX, KLSE
+      if (/\.HK$/.test(ticker))       return 16;    // HKEX
+      if (/\.L$/.test(ticker))        return 16.5;  // LSE (16:30)
+      if (/^[A-Z0-9-]+$/.test(ticker)) return 16;   // NYSE/NASDAQ
+      return 24; // unknown/FX — never counts as "settled" same-day
+    })();
+    const SETTLEMENT_BUFFER_MIN = 30; // allow for Yahoo's data-posting lag after physical close
     const todayForExch = (() => {
       const offsetMs = EXCH_UTC_OFFSET_H * 3600000;
       return new Date(Date.now() + offsetMs).toISOString().slice(0, 10);
     })();
-    while (dates.length > 0 && dates[dates.length - 1].toISOString().slice(0, 10) === todayForExch) {
+    const todaySettled = (() => {
+      const localMidnightUtcMs = Date.parse(`${todayForExch}T00:00:00Z`) - EXCH_UTC_OFFSET_H * 3600000;
+      const closeUtcMs = localMidnightUtcMs + EXCH_CLOSE_LOCAL_HOUR * 3600000 + SETTLEMENT_BUFFER_MIN * 60000;
+      return Date.now() >= closeUtcMs;
+    })();
+    while (dates.length > 0 && dates[dates.length - 1].toISOString().slice(0, 10) === todayForExch && !todaySettled) {
       dates.pop();
       cleanCloses.pop();
     }
@@ -3740,12 +3777,14 @@ async function fetchPricesForTicker(ticker, fromDate) {
     }
 
     // Use regularMarketTime + regularMarketPrice to ensure closes[-1] = T-1.
-    // Only act when the settled date is NOT today — today's prices are always
-    // excluded regardless of whether the exchange has closed.
+    // Only skip using it when the settled date is today AND that session
+    // hasn't actually closed yet — a genuinely past day, or a same-day
+    // session that has already settled, should always be used.
     if (regularMarketPrice != null && regularMarketTime != null) {
       const rmpDate     = new Date(regularMarketTime * 1000).toISOString().slice(0, 10);
       const lastBarDate = dates[dates.length - 1].toISOString().slice(0, 10);
-      if (rmpDate !== todayForExch) {
+      const rmpIsUnsettledToday = rmpDate === todayForExch && !todaySettled;
+      if (!rmpIsUnsettledToday) {
         if (rmpDate > lastBarDate) {
           // T-1 bar missing from array (e.g. NYSE lag) — inject it
           dates.push(new Date(regularMarketTime * 1000));
@@ -6639,8 +6678,16 @@ function renderHoldings() {
   // but the summary has its own independent search/filter/currency controls
   const allHoldings = Object.values(portfolio.holdings);
   renderHoldingsSummary(allHoldings);
-  // renderEodPriceTable skipped — EOD columns merged into holdings table above
-  // renderEodPriceTable(allHoldings);
+  // Revived 2026-07-25: EOD close/day-chg columns were merged into the main
+  // Holdings table above, but that merge dropped the one thing this table
+  // still uniquely provides — each holding's own EOD date, flagged (see
+  // dateNote in renderEodPriceTable()) whenever it differs from the
+  // portfolio-wide majority date. Without it there was no way to see WHICH
+  // symbol the Dashboard's "N pending" / Holdings Summary's "N excluded —
+  // different EOD date" counts referred to. The Summary table's own tooltip
+  // ("See the EOD closing prices table for which symbols and dates") was
+  // still pointing here the whole time — it had just gone silently dead.
+  renderEodPriceTable(allHoldings);
 
   // Re-wire symbol-click-to-detail-tab links. Fixed 2026-06-26: this table
   // has its own search/filter/sort controls (search box, type filter, sort
