@@ -10483,26 +10483,45 @@ function loadManualDeclarations() {
     if (!divCache[ticker]) {
       divCache[ticker] = { dividends: manualDivs, currency: ccy, manual: true };
     } else {
-      const existing = divCache[ticker].dividends;
-      const byDate    = {};
-      existing.forEach(d => { byDate[d.date.toISOString().slice(0, 10)] = d; });
+      // Drop any purely-manual records this function injected on an earlier
+      // render pass before re-merging. divCache lives for the whole session,
+      // so without this an edited declaration (dps and/or ex-date/pay-date
+      // changed) matched its own stale record below and never got refreshed.
+      let existing = divCache[ticker].dividends.filter(d => !d.manual);
+
+      // Manual declarations are the highest-trust, user-verified source, so
+      // they REPLACE a same-event Yahoo/dividends.sg record rather than
+      // merely supplementing it — both the amount and the pay date. "Same
+      // event" is matched within a small date tolerance, not an exact date:
+      // Yahoo/dividends.sg occasionally report an ex-date a day or two off
+      // the real one for the same payout (timezone / announcement-vs-
+      // record-date differences). An exact-date-only match (i) left Yahoo's
+      // amount in place whenever the dates DID coincide, silently discarding
+      // a corrected dps, and (ii) added the manual entry as a second, extra
+      // record whenever the dates DIDN'T coincide, double-counting the same
+      // payout. Fixed 2026-07-25, found via LAND (exact-date dps correction
+      // ignored) and SHLD (1-day-off ex-date created a duplicate "received"
+      // row) both still showing stale/duplicated after the 2026-07-25 fix
+      // above, which only handled a manual entry going stale against itself.
+      const DEDUP_WINDOW_DAYS = 5;
       manualDivs.forEach(d => {
-        const ds = d.date.toISOString().slice(0, 10);
-        const match = byDate[ds];
-        if (!match) {
-          // Genuinely new date — add it
+        let closestIdx = -1, closestDist = Infinity;
+        existing.forEach((e, i) => {
+          const dist = Math.abs(e.date - d.date) / 86400000;
+          if (dist <= DEDUP_WINDOW_DAYS && dist < closestDist) { closestDist = dist; closestIdx = i; }
+        });
+        if (closestIdx === -1) {
           existing.push(d);
-          byDate[ds] = d;
-        } else if (d.payDate && !match.payDate) {
-          // Same ex-date already present (e.g. from Yahoo) but missing a pay
-          // date — backfill it from the manual entry rather than discarding
-          // the manually-entered pay date. Fixed 2026-06-22: this case was
-          // previously silently dropped, so manual pay dates never reached
-          // historyRows for any symbol Yahoo also had dividend data for.
-          match.payDate = d.payDate;
+        } else {
+          // Replace the matched record wholesale with the manual declaration
+          // (correct amount + date), keeping the existing pay date only if
+          // the manual entry didn't specify one.
+          const prev = existing[closestIdx];
+          existing[closestIdx] = { ...d, payDate: d.payDate || prev.payDate };
         }
       });
       existing.sort((a, b) => a.date - b.date);
+      divCache[ticker].dividends = existing;
     }
     clearDivSplitCache(); // manual dividends change computed results
   });
