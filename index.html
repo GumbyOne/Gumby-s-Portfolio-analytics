@@ -496,12 +496,243 @@
   .empty-state i { font-size: 40px; margin-bottom: 12px; display: block; opacity: 0.4; }
   .empty-state p { font-size: 13px; margin-bottom: 14px; }
 
-  /* Print styles */
+  /* ── Print / PDF report ────────────────────────────────────────────
+     Toggled via generateReport() which un-hides all report-worthy tabs
+     and calls Chart.js .resize() before window.print(). Long tables
+     (transactions, dividend history, sell history) are truncated to the
+     N most recent rows via nth-child so the report stays 10–15 pages. */
+  #print-cover-page { display: none; }
+  .print-only-note { display: none; }
+
   @media print {
-    .topbar, .tabs, .btn-primary, .btn-secondary, .rbtn, .range-btns { display: none !important; }
-    .content { padding: 0; }
-    .chart-card { page-break-inside: avoid; border: 1px solid #ccc; }
-    body { font-size: 12px; }
+    /* margin:0 suppresses the browser's built-in URL / page-number header and
+       footer that appear when printing. All visible margins are provided by
+       #print-cover-page padding and .content padding below. */
+    @page { size: A4 portrait; margin: 0; }
+    /* Give each page a consistent 12mm content margin by padding the body */
+    body { padding: 12mm 12mm 10mm 12mm !important; }
+
+    /* Force light palette regardless of OS dark-mode preference */
+    :root {
+      --bg-primary: #ffffff !important;
+      --bg-secondary: #f5f5f3 !important;
+      --bg-tertiary: #ffffff !important;
+      --text-primary: #1a1a18 !important;
+      --text-secondary: #555 !important;
+      --border: #d0d0d0 !important;
+      --border-med: #b0b0b0 !important;
+    }
+    html, body { background: #fff !important; color: #1a1a18 !important; font-size: 9pt; }
+
+    /* Hide chrome + interactive elements */
+    .topbar, .tabs, #sidebar, .sidebar, #main-header, .main-header,
+    .btn-primary, .btn-secondary, .rbtn, .range-btns,
+    .search-wrap, select, input[type="text"], input[type="search"],
+    #toast-container, .toast, .stock-overlay,
+    .modal-overlay, .modal-backdrop, .backup-reminder,
+    .sort-arrow, a[onclick], .contextual-action { display: none !important; }
+
+    /* Show report tabs, hide non-report */
+    #tab-dashboard, #tab-holdings, #tab-performance,
+    #tab-exposure, #tab-dividends,
+    #tab-transactions, #tab-realised, #tab-corpactions { display: block !important; }
+    #tab-risk, #tab-alerts, #tab-import { display: none !important; }
+
+    /* Hide floating editors that live outside any tab, plus other admin/redundant
+       widgets we don't want in a report */
+    .chart-card:has(#classification-editor),
+    .chart-card:has(#tags-editor) { display: none !important; }
+    #eod-price-card { display: none !important; }
+    #div-manual-panel { display: none !important; }
+    .db-zone-c { display: none !important; }
+
+    /* ── DASHBOARD: keep KPI cards + top holdings; drop daily-change + sunburst ── */
+    .chart-card:has(#navChart) { display: none !important; }
+    .db-zone-b { display: none !important; }
+
+    /* ── PERFORMANCE: keep KPI rows + annual returns table; drop everything else ── */
+    .chart-card:has(#perfChart) { display: none !important; }
+    .chart-card:has(#price-coverage-summary) { display: none !important; }
+    .chart-card:has(#heatmap-container) { display: none !important; }
+    .chart-card:has(#attribution-table) { display: none !important; }
+    #tab-performance > p { display: none !important; }
+
+    /* ── RISK: drop entire tab ── */
+    #tab-risk { display: none !important; break-before: avoid !important; page-break-before: avoid !important; }
+
+    /* ── EXPOSURE: keep only exchange summary table; drop charts + other cards ── */
+    #tab-exposure .grid-3 { display: none !important; }
+    .chart-card:has(#currency-detail) { display: none !important; }
+    .chart-card:has(#concChart) { display: none !important; }
+    #ticker-compare-card { display: none !important; }
+
+    /* ── DIVIDENDS: keep KPIs + YTD received + upcoming + annual table + declared;
+       drop bar charts, projected monthly, per-ticker table, full history ── */
+    .chart-card:has(#divReceivedChart) { display: none !important; }
+    .chart-card:has(#divChart) { display: none !important; }
+    .chart-card:has(#divCcyChart) { display: none !important; }
+    .chart-card:has(#div-proj-table) { display: none !important; }
+    .chart-card:has(#div-history-table) { display: none !important; }
+    #saved-corrections-card { display: none !important; }
+
+    /* Content layout — zero out container padding; body padding handles margins */
+    .app, .main-area, .content { padding: 0 !important; margin: 0 !important; background: #fff !important; max-width: none !important; }
+    /* KPI / hero metric grids — enforce min column width so they stay in a row */
+    .metrics-grid, .kpi-grid, .hero-grid, .db-zone-a, .db-zone-b {
+      display: grid !important;
+      grid-template-columns: repeat(auto-fit, minmax(90pt, 1fr)) !important;
+      gap: 2.5mm !important;
+    }
+    /* grid-2 and grid-3 layout cards */
+    .grid-2 { display: grid !important; grid-template-columns: 1fr 1fr !important; gap: 3mm !important; }
+    .grid-3 { display: grid !important; grid-template-columns: 1fr 1fr 1fr !important; gap: 3mm !important; }
+
+    /* Each report section starts on a new page (dashboard follows the cover banner) */
+    #tab-holdings, #tab-performance, #tab-exposure,
+    #tab-dividends, #tab-transactions, #tab-realised, #tab-corpactions {
+      page-break-before: always;
+      break-before: page;
+      padding-top: 3mm;
+    }
+    /* Risk tab is dropped entirely from the report */
+    #tab-risk { display: none !important; break-before: avoid !important; page-break-before: avoid !important; }
+
+    /* Compact section titles via ::before */
+    #tab-dashboard::before,
+    #tab-holdings::before, #tab-performance::before,
+    #tab-exposure::before, #tab-dividends::before,
+    #tab-transactions::before,
+    #tab-realised::before, #tab-corpactions::before {
+      display: block;
+      font-size: 12pt;
+      font-weight: 500;
+      color: #1a1a18;
+      margin: 0 0 2.5mm 0;
+      padding-bottom: 1.5mm;
+      border-bottom: 0.75pt solid #1D9E75;
+    }
+    #tab-dashboard::before    { content: "Portfolio overview"; }
+    #tab-holdings::before     { content: "Holdings"; }
+    #tab-performance::before  { content: "Performance"; }
+    #tab-risk::before         { content: "Risk analysis"; }
+    #tab-exposure::before     { content: "Exposure"; }
+    #tab-dividends::before    { content: "Dividend income"; }
+    #tab-transactions::before { content: "Transaction activity"; }
+    #tab-realised::before     { content: "Realised P&L"; }
+    #tab-corpactions::before  { content: "Corporate actions"; }
+
+    /* Cards tightened for print density */
+    .chart-card, .metric, .kpi-card, .hero-card, .hero-tile {
+      page-break-inside: avoid;
+      break-inside: avoid;
+      box-shadow: none !important;
+      border: 0.5pt solid #d8d8d8 !important;
+      background: #fff !important;
+    }
+    .metric, .kpi-card, .hero-card, .hero-tile { background: #f7f7f5 !important; }
+    .chart-card { margin-bottom: 3mm !important; padding: 2.5mm 3mm !important; }
+    .chart-title { font-size: 9.5pt !important; margin-bottom: 2mm !important; }
+    .chart-title-sub { font-size: 8pt !important; }
+
+    /* Canvas capped — prevents charts overflowing into the next page */
+    canvas { max-height: 68mm !important; height: auto !important; }
+    /* Sunburst SVGs (composition chart) shrink to fit page width */
+    svg#sunburstSvg, svg#sunburstSvgCost { max-width: 60mm; max-height: 60mm; height: auto; width: auto; }
+
+    /* ── Symbol + company name ── */
+    /* Inline sym-name: inject a space before the name so "D05" and "DBS"
+       don't merge into "D05DBS" in print. Also lift ellipsis clipping so
+       full names render (they won't overflow since the cell wraps). */
+    .symbol + .sym-name::before { content: '\00a0'; }   /* non-breaking space as separator */
+    .sym-name {
+      white-space: normal !important;        /* allow wrapping */
+      overflow: visible !important;
+      text-overflow: unset !important;
+      max-width: none !important;
+      display: inline !important;            /* stay inline with the ticker */
+      font-size: 7.5pt !important;
+    }
+    /* Stacked sym-name variant (used in some tables): make it a proper block */
+    .sym-name[style*="display:block"] { display: block !important; }
+
+    /* ── Holdings table: hide interactive / redundant columns ── */
+    /* "Day chg (price)", "Day chg (SGD)", "Day chg %", "Actions" are dropped
+       in print — too wide and not useful on paper. We target them by nth-child
+       positional index in the 12-column holdings table:
+       col 1=Symbol, 2=Shares, 3=Avg cost, 4=EOD close, 5=Day chg price,
+       6=Day chg SGD, 7=Day chg %, 8=Value, 9=P&L, 10=Return, 11=Weight,
+       12=Actions */
+    #holdings-body tr > td:nth-child(5),
+    #holdings-body tr > td:nth-child(6),
+    #holdings-body tr > td:nth-child(7),
+    #holdings-body tr > td:nth-child(12),
+    #tab-holdings table thead tr > th:nth-child(5),
+    #tab-holdings table thead tr > th:nth-child(6),
+    #tab-holdings table thead tr > th:nth-child(7),
+    #tab-holdings table thead tr > th:nth-child(12) { display: none !important; }
+
+    /* Holdings summary currency table: keep dual-row cells readable */
+    #holdings-ccy-summary td { vertical-align: top !important; }
+
+    /* Tables denser */
+    table { font-size: 7.5pt !important; }
+    table thead { display: table-header-group; }
+    table tfoot { display: table-footer-group; }
+    table tr { page-break-inside: avoid; break-inside: avoid; }
+    .holdings-table th, .holdings-table td,
+    .data-table th, .data-table td { padding: 2pt 3pt !important; }
+    /* Right-align numeric column headers in print for readability */
+    .data-table th[style*="text-align:right"] { text-align: right !important; }
+
+    /* Truncate the three long tables that would otherwise spill across 20+ pages.
+       These render newest-first so we keep the most recent slice. */
+    #txn-body tr:nth-child(n+26),
+    #div-history-body tr:nth-child(n+31),
+    #rl-closed-body tr:nth-child(n+31) { display: none !important; }
+
+    /* Print-only note injected by generateReport() after truncated tables */
+    .print-only-note {
+      display: block !important;
+      font-size: 8pt;
+      color: #666;
+      font-style: italic;
+      padding: 2mm 0;
+    }
+
+    /* Ensure background colours render in Chromium */
+    * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
+
+    /* ── Cover: compact banner strip, no dedicated page ── */
+    #print-cover-page {
+      display: flex !important;
+      justify-content: space-between;
+      align-items: center;
+      gap: 8mm;
+      padding: 3mm 0 3.5mm 0;
+      margin: 0 0 4mm 0;
+      border-bottom: 1pt solid #1D9E75;
+      background: transparent !important;
+      height: auto !important;
+      min-height: 0 !important;
+      page-break-after: auto !important;
+      break-after: auto !important;
+    }
+    #print-cover-page .cover-title-line {
+      font-size: 12pt; font-weight: 600; color: #1a1a18;
+      letter-spacing: 0.01em; flex-shrink: 0;
+    }
+    #print-cover-page .cover-title-line .accent { color: #1D9E75; }
+    #print-cover-page .cover-meta-line {
+      font-size: 8pt; color: #555; text-align: right; line-height: 1.6;
+    }
+    /* Section titles — slightly more breathing room */
+    #tab-dashboard::before,
+    #tab-holdings::before, #tab-performance::before,
+    #tab-exposure::before, #tab-dividends::before,
+    #tab-transactions::before,
+    #tab-realised::before, #tab-corpactions::before {
+      margin-top: 1mm !important;
+    }
   }
 
   /* Scrollable table wrapper */
@@ -712,7 +943,7 @@
           <button class="btn-secondary" onclick="refetchPrices()" id="btn-refetch" style="display:none" title="Re-fetch closing prices"><i class="ti ti-refresh"></i><span> Refresh</span></button>
           <button class="btn-secondary" onclick="exportCSV()" id="btn-export" style="display:none"><i class="ti ti-download"></i><span> Export</span></button>
           <button class="btn-secondary" onclick="openModal('full-backup-modal')" id="btn-full-backup" style="display:none" title="Back up everything — corp actions, price overrides, dividend data, and more"><i class="ti ti-database-export"></i><span> Backup</span></button>
-          <button class="btn-secondary" onclick="window.print()" title="Print"><i class="ti ti-printer"></i></button>
+          <button class="btn-secondary" onclick="generateReport()" title="Generate PDF report"><i class="ti ti-printer"></i></button>
           <button class="btn-secondary" onclick="showMobileQR()" title="Mobile snapshot QR"><i class="ti ti-qrcode"></i></button>
           <button class="btn-secondary" onclick="loadDemo()"><i class="ti ti-test-pipe"></i><span> Demo</span></button>
           <label class="btn-primary" style="cursor:pointer"><i class="ti ti-upload"></i><span> Import CSV</span><input type="file" accept=".csv,.tsv" style="display:none" onchange="handleFile(this)"></label>
@@ -731,6 +962,9 @@
     </div>
 
   <div class="content">
+
+    <!-- PRINT COVER PAGE (populated by generateReport(); hidden except in @media print) -->
+    <div id="print-cover-page"></div>
 
     <!-- DASHBOARD -->
     <div id="tab-dashboard">
@@ -10270,8 +10504,7 @@ async function fetchDividendsSG() {
       // the pay date whenever a single ex-date had more than one dividend
       // line (very common — most SGX dividends are an ordinary + a special,
       // or split into two "Rate" entries). Fixed 2026-06-22.
-      const byExFuture = {};
-      const byExPast    = {};
+      const byEx = {};
       let lastExStr = null;
       const dateRe = /^\d{4}-\d{2}-\d{2}$/;
       const amtRe  = /^[A-Z]{3}\s*[\d.]+$/;
@@ -10321,15 +10554,40 @@ async function fetchDividendsSG() {
         const ccyMatch = amtStr.match(/([A-Z]{3})/);
         const ccy = ccyMatch ? ccyMatch[1] : 'SGD';
 
-        const byEx = exStr < todayStr ? byExPast : byExFuture;
+        // Group by ex-date only here — classification into "not yet paid" vs
+        // "paid" happens AFTER all rows are parsed (see below), once we know
+        // whether a real pay date turned up anywhere for this ex-date.
         if (!byEx[exStr]) byEx[exStr] = { exDate, exStr, dps: 0, currency: ccy, payDate: null };
         byEx[exStr].dps += dps;
         if (payCell && dateRe.test(payCell) && !byEx[exStr].payDate) {
           byEx[exStr].payDate = new Date(payCell);
         }
       });
-      // Soonest upcoming entry (existing behaviour)
-      const futureEntries = Object.values(byExFuture).sort((a,b) => a.exDate - b.exDate);
+      // Classify AFTER parsing, using "not yet paid" — the same test the
+      // Upcoming cards themselves use (payDate > now when known, else
+      // exDate >= today) — instead of the ex-date-vs-today split this used
+      // to do row-by-row. That old split routed ANY dividend into byExPast
+      // the instant its ex-date passed, even when the very same row carried
+      // a real pay date still weeks in the future; only byExFuture ever fed
+      // `parsed.upcoming` (and from there announcedDivCache), so a declared-
+      // but-unpaid dividend vanished from both Upcoming cards for its entire
+      // ex-to-pay window — even though those cards' own "not yet paid" filter
+      // is built to keep exactly this kind of entry visible; it just never
+      // had a cache entry to filter. Confirmed live 2026-08-06 on CLR (ex
+      // 2026-07-30, pay 2026-08-28), HMN (ex 2026-08-04, pay 2026-08-28),
+      // ME8U (ex 2026-07-30, pay 2026-09-07), and AJBU (ex 2026-07-30, pay
+      // 2026-09-18) — all four had gone ex within the prior week and
+      // disappeared from both Upcoming cards despite being fully declared
+      // and still unpaid. Fixed 2026-08-06.
+      const byExFuture = {};
+      const byExPast    = {};
+      Object.values(byEx).forEach(e => {
+        const notYetPaid = e.payDate ? (e.payDate > now) : (e.exStr >= todayStr);
+        (notYetPaid ? byExFuture : byExPast)[e.exStr] = e;
+      });
+      // Soonest not-yet-paid entry — sort by pay date when known (falls back
+      // to ex-date), mirroring the sort the Upcoming cards themselves use.
+      const futureEntries = Object.values(byExFuture).sort((a,b) => (a.payDate || a.exDate) - (b.payDate || b.exDate));
       return { upcoming: futureEntries.length ? futureEntries[0] : null, history: byExPast };
     }
 
@@ -14430,6 +14688,119 @@ function initApp() {
 }
 
 document.addEventListener('DOMContentLoaded', initApp);
+
+// ── PDF REPORT GENERATION ─────────────────────────────────────────────
+// Unhides all report-worthy tabs, populates the cover page from live DOM
+// KPI values, forces Chart.js canvases to re-measure at their (now
+// visible) print-time dimensions, and calls window.print(). Cover page
+// and section titles are pure CSS — @media print handles the rest.
+// The .hidden class is restored on afterprint (belt-and-braces: also on
+// a timeout, in case the browser suppresses afterprint on cancel).
+const REPORT_TAB_IDS = ['tab-holdings','tab-performance','tab-risk','tab-exposure','tab-dividends','tab-transactions','tab-realised','tab-corpactions'];
+let _reportHiddenBefore = [];
+
+function populatePrintCover() {
+  const cover = document.getElementById('print-cover-page');
+  if (!cover) return;
+  const pfNames = (function() {
+    try {
+      if (!activePfIds || activePfIds.length === 0) {
+        return Object.keys(pfRegistry || {}).length ? 'All portfolios' : 'Portfolio';
+      }
+      return activePfIds.map(id => pfRegistry[id] && pfRegistry[id].name).filter(Boolean).join(', ') || 'Portfolio';
+    } catch(e) { return 'Portfolio'; }
+  })();
+  const now = new Date();
+  const asAt = now.toLocaleDateString('en-SG', { year:'numeric', month:'long', day:'numeric' });
+  cover.innerHTML = ''
+    + '<div class="cover-title-line">'
+    +   'Portfolio<span class="accent">Analytics</span> &middot; Report'
+    + '</div>'
+    + '<div class="cover-meta-line">'
+    +   escapeHtml(pfNames) + ' &middot; As at ' + asAt + ' &middot; Reporting currency: SGD'
+    + '</div>';
+}
+
+function escapeHtml(s) {
+  return String(s == null ? '' : s).replace(/[&<>"']/g, ch => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]));
+}
+
+function generateReport() {
+  if (!portfolio || !portfolio.transactions || portfolio.transactions.length === 0) {
+    if (typeof toast === 'function') toast('Load a portfolio first', 'error');
+    else alert('Load a portfolio first');
+    return;
+  }
+  populatePrintCover();
+  // Un-hide all report-worthy tabs (screen-visible for the moment before print dialog opens)
+  _reportHiddenBefore = [];
+  REPORT_TAB_IDS.forEach(id => {
+    const el = document.getElementById(id);
+    if (el && el.classList.contains('hidden')) { _reportHiddenBefore.push(id); el.classList.remove('hidden'); }
+  });
+  // Inject "showing N of M" notes AFTER the tables that get truncated by @media print.
+  // Kept in the DOM as .print-only-note (hidden on screen, shown only in @media print).
+  injectPrintTruncationNotes();
+  // Give the browser a paint frame so Chart.js can measure the now-visible containers,
+  // then resize all charts, then trigger print on the following frame.
+  requestAnimationFrame(() => {
+    try {
+      const charts = (portfolio && portfolio.allCharts) ? portfolio.allCharts : {};
+      Object.values(charts).forEach(c => { if (c && typeof c.resize === 'function') { try { c.resize(); } catch(e) {} } });
+    } catch(e) { console.warn('[generateReport] chart resize failed', e); }
+    requestAnimationFrame(() => {
+      try { window.print(); } catch(e) { console.error('[generateReport] window.print() failed', e); }
+      // Restore hidden state after the print dialog resolves (covers both accept and cancel)
+      setTimeout(restoreAfterReport, 400);
+    });
+  });
+}
+
+// Insert small "Showing recent N of M — see the app for the full list" hints right
+// after the tables that @media print truncates via nth-child. Only visible in print.
+const _reportTruncationTargets = [
+  { tbodyId: 'txn-body',         limit: 25, label: 'transactions' },
+  { tbodyId: 'div-history-body', limit: 30, label: 'dividend payments' },
+  { tbodyId: 'rl-closed-body',   limit: 30, label: 'sells' }
+];
+function injectPrintTruncationNotes() {
+  removePrintTruncationNotes(); // idempotent
+  _reportTruncationTargets.forEach(t => {
+    const tbody = document.getElementById(t.tbodyId);
+    if (!tbody) return;
+    const rowCount = tbody.querySelectorAll('tr').length;
+    if (rowCount <= t.limit) return; // nothing truncated for this table
+    const note = document.createElement('div');
+    note.className = 'print-only-note report-truncation-note';
+    note.textContent = 'Showing recent ' + t.limit + ' of ' + rowCount.toLocaleString('en-SG') + ' ' + t.label + '. Full history available in the app.';
+    // Insert immediately after the enclosing table (or its wrapping .table-wrap)
+    const table = tbody.closest('table');
+    const anchor = (table && table.parentElement && table.parentElement.classList.contains('table-wrap')) ? table.parentElement : table;
+    if (anchor && anchor.parentElement) anchor.parentElement.insertBefore(note, anchor.nextSibling);
+  });
+}
+function removePrintTruncationNotes() {
+  document.querySelectorAll('.report-truncation-note').forEach(el => el.remove());
+}
+
+function restoreAfterReport() {
+  if (_reportHiddenBefore && _reportHiddenBefore.length) {
+    _reportHiddenBefore.forEach(id => { const el = document.getElementById(id); if (el) el.classList.add('hidden'); });
+    _reportHiddenBefore = [];
+  }
+  // Clean up the injected "showing recent N of M" notes regardless of print outcome
+  removePrintTruncationNotes();
+}
+
+// Extra safety: also resize charts on beforeprint (some browsers apply @media print
+// before firing this event, which changes container dimensions), and restore on afterprint.
+window.addEventListener('beforeprint', () => {
+  try {
+    const charts = (portfolio && portfolio.allCharts) ? portfolio.allCharts : {};
+    Object.values(charts).forEach(c => { if (c && typeof c.resize === 'function') { try { c.resize(); } catch(e) {} } });
+  } catch(e) {}
+});
+window.addEventListener('afterprint', restoreAfterReport);
 
 </script>
 
