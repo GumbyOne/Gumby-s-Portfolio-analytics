@@ -1238,6 +1238,7 @@
               <th style="text-align:right">Value (SGD)</th>
               <th style="text-align:right">P&amp;L (SGD)</th>
               <th style="text-align:right">Return %</th>
+              <th style="text-align:right" title="Bold = yield on cost — forward-projected next 12 months, vs. what you paid. Small = yield on current value — trailing 12 months' actual dividends received on shares you still hold, vs. today's price (this is what tracks close to external trackers like dividends.sg/Yahoo). Hover a row's cell for details.">Div Yield</th>
               <th style="text-align:right">Weight</th>
               <th style="text-align:right">Actions</th>
             </tr></thead>
@@ -1576,7 +1577,7 @@
         </div>
       </div>
 
-      <!-- YTD dividends received by pay date + Upcoming ex-dates — immediately after KPIs -->
+      <!-- YTD dividends received by pay date + Upcoming pay dates — immediately after KPIs -->
       <div class="grid-2">
         <div class="chart-card">
           <div class="chart-title">YTD dividends received <span class="chart-title-sub" id="ytd-div-sub" title="Strictly dividends already paid out by today. A dividend that has gone ex but not yet reached its pay date will appear here only once paid.">by pay date</span>
@@ -1585,7 +1586,7 @@
           <div id="div-ytd-by-paydate"></div>
         </div>
         <div class="chart-card">
-          <div class="chart-title">Upcoming ex-dividend dates <span class="chart-title-sub">next 60 days</span>
+          <div class="chart-title">Upcoming pay dates <span class="chart-title-sub" title="Declared dividends not yet paid, sorted by pay date. Falls back to ex-date for entries whose pay date isn't confirmed yet.">next 60 days</span>
             <span onclick="openModal('upcoming-div-modal')" style="font-size:12px;color:var(--text-secondary);cursor:pointer;text-decoration:underline;font-weight:400" id="upcoming-div-expand-link">Show all</span>
           </div>
           <div id="div-upcoming-total" style="font-size:12px;color:var(--text-secondary);margin-bottom:8px"></div>
@@ -1690,8 +1691,8 @@
               <th style="text-align:right">Annual DPS</th>
               <th style="text-align:right">Projected (local)</th>
               <th style="text-align:right">Projected (SGD)</th>
-              <th style="text-align:right">Yield on cost</th>
-              <th style="text-align:right">Yield on NAV</th>
+              <th style="text-align:right" title="Forward-projected: this column's own annual DPS estimate ÷ cost basis.">Yield on cost (fwd)</th>
+              <th style="text-align:right" title="Trailing actual: real dividends received on shares still held in the last 12 months ÷ current value. Independent of this table's forward projection — matches external trackers (dividends.sg, Yahoo, etc.) far more closely than annualising the last payment would.">Yield on NAV (T12M)</th>
               <th>Source</th>
             </tr></thead>
             <tbody id="div-proj-body"></tbody>
@@ -3007,7 +3008,11 @@ function divYield(type) { return {reit:0.055, bond:0.04, stock:0.03, etf:0.015}[
 
 // Tickers that do not pay dividends — excluded from all yield estimates,
 // projections, and dividend lookups. Add symbols here as needed.
-const NON_DIVIDEND_SYMS = new Set(['HST', 'GLS']);
+// ADYEN.AS added 2026-08-15: has never paid a dividend (returns capital via
+// buybacks instead) and has no Yahoo dividend history to reflect that — so
+// without this exclusion it fell into the generic type-based estimate
+// fallback (~3% for 'stock') and displayed a fabricated yield.
+const NON_DIVIDEND_SYMS = new Set(['HST', 'GLS', 'ADYEN.AS']);
 
 // ES3 (SPDR STI ETF) inception date — used to clamp benchmark comparisons
 // and ensure the full price history is always fetched for the benchmark.
@@ -6857,7 +6862,7 @@ function renderHoldings() {
   else if (sortBy==='name')   items.sort((a,b)=>a.sym.localeCompare(b.sym));
   else items.sort((a,b)=>b.weight-a.weight);
   const tbody = document.getElementById('holdings-body');
-  if (!items.length) { tbody.innerHTML='<tr><td colspan="12" style="text-align:center;padding:32px;color:var(--text-secondary)">No holdings found.</td></tr>'; return; }
+  if (!items.length) { tbody.innerHTML='<tr><td colspan="13" style="text-align:center;padding:32px;color:var(--text-secondary)">No holdings found.</td></tr>'; return; }
 
   // Price column header badge: "EOD close" when prices fetched, "est" otherwise.
   // All value/P&L calculations use h.curPrice = lastBusinessClose (EOD).
@@ -6889,6 +6894,25 @@ function renderHoldings() {
     const eodPriceChgTxt = h.eodDayChg === null ? '—' : `${h.ccy} ${h.eodDayChg>=0?'+':''}${h.eodDayChg.toFixed(3)}`;
     const dayTxt = dayChgValSGD === null ? '—' : `${dayChgValSGD>=0?'+':'-'}S$${fmt(Math.abs(dayChgValSGD))}`;
     const dayPctTxt = h.eodDayChgPct === null ? '—' : `${h.eodDayChgPct>=0?'+':''}${h.eodDayChgPct.toFixed(2)}%`;
+    // Dividend yield — see computeHoldingDividendYield() (shared with the
+    // Dividends tab's per-ticker table, so the two never drift). yoc is
+    // forward-projected; yon is trailing-12mo actual — different
+    // methodologies on purpose, see that function's doc comment.
+    const dy = computeHoldingDividendYield(h.sym, h);
+    let dyHtml, dyTitle;
+    if (dy.yoc == null) {
+      dyHtml  = `<span style="color:var(--text-secondary)">—</span>`;
+      dyTitle = 'No dividend data for this ticker.';
+    } else {
+      const yocStr  = dy.yoc.toFixed(2) + '%';
+      const yonStr  = dy.yon != null ? dy.yon.toFixed(2) + '%' : '—';
+      const srcName = dy.isDeclared ? 'declared by company' : dy.src === 'live' ? 'Yahoo dividend history' : 'estimated (no dividend data yet)';
+      const yonNote = dy.yon != null
+        ? `SGD ${fmt(dy.yon12mReceivedSGD, 0)} actually received on still-held shares in the last 12 months`
+        : `nothing received on still-held shares in the last 12 months yet`;
+      dyHtml  = `<span style="font-weight:600">${yocStr}</span><br><span style="font-size:10px;color:var(--text-secondary)">${yonStr} T12M</span>`;
+      dyTitle = `Yield on cost: ${yocStr} (forward-projected, next 12mo, source: ${srcName}) · Yield on current value: ${yonStr} (trailing 12mo actual — ${yonNote})`;
+    }
     return `<tr>
       <td>${symWithName(h.sym)}</td>
       <td style="text-align:right">${fmt(h.shares)}</td>
@@ -6900,6 +6924,7 @@ function renderHoldings() {
       <td style="text-align:right">S$${fmt(h.valueSGD)}</td>
       <td style="text-align:right" class="${pc}">${h.pnl>=0?'+':'-'}S$${fmt(Math.abs(h.pnl))}</td>
       <td style="text-align:right" class="${pc}">${fmtPct(h.pnlPct)}</td>
+      <td style="text-align:right" title="${escHtml(dyTitle)}">${dyHtml}</td>
       <td style="text-align:right">${h.weight.toFixed(1)}%</td>
       <td style="text-align:right"><button class="btn-icon" onclick="addAlertForSymbol('${h.sym}')" title="Set alert"><i class="ti ti-bell"></i></button></td>
     </tr>`;
@@ -11423,9 +11448,14 @@ function getYahooFallbackUpcomingDivs() {
 
 // ─── RENDER UPCOMING ANNOUNCED ────────────────────────────────────────
 function renderUpcomingDivEntry(e, now) {
-  const daysAway  = Math.ceil((e.exDate - now) / 86400000);
-  const exStr     = e.exDate.toISOString().slice(0,10);
-  const payStr    = e.payDate ? e.payDate.toISOString().slice(0,10) : '—';
+  // Pay date is the "still owed" date — mirrors renderDashboardUpcoming()'s
+  // convention. Falls back to ex-date for entries without a confirmed pay
+  // date yet (e.g. fresh Yahoo-fallback entries), same as the Dashboard card.
+  const payDate    = e.payDate || null;
+  const countDate  = payDate || e.exDate;
+  const daysAway   = Math.ceil((countDate - now) / 86400000);
+  const exStr      = e.exDate.toISOString().slice(0,10);
+  const payStr     = payDate ? payDate.toISOString().slice(0,10) : null;
   const srcBadge  = e.source === 'dividends.sg'
     ? `<span class="price-badge price-live" title="Source: dividends.sg (SGX declared announcement)">dividends.sg</span>`
     : e.source === 'manual'
@@ -11436,20 +11466,24 @@ function renderUpcomingDivEntry(e, now) {
   const urgency   = daysAway <= 7  ? 'color:var(--red);font-weight:600'
                   : daysAway <= 30 ? 'color:var(--amber);font-weight:500'
                   : 'color:var(--text-secondary)';
-  // Mirrors the YTD-received card layout exactly:
-  //   Ex date (fixed min-width, urgency colour) | Symbol+badge [flex:1] | DPS x shares | S$ amount | Pay date
-  // flex:1 only on the symbol/badge span so DPS, amount and pay date columns
+  // Pay date (fixed min-width, urgency colour) | Symbol+badge [flex:1] | DPS x shares | S$ amount | Ex date
+  // Primary slot shows Pay date — falls back to "Ex" label when pay date
+  // isn't confirmed yet, same fallback the Dashboard card uses. Ex-date
+  // stays visible on the right (muted) so it's never lost, just demoted —
+  // it's always known, whereas pay date sometimes isn't yet.
+  // flex:1 only on the symbol/badge span so DPS, amount and date columns
   // are always fully visible. Putting DPS inside the flex span caused clipping
   // on narrow cards because the source badge ("dividends.sg") is wider than "paid".
   const dpsDetail = e.dpsEstimated
     ? `<span style="color:var(--text-secondary);margin-right:8px">${e.currency} ${e.dps.toFixed(4)} \xd7 ${fmt(e.sharesHeld)} <span style="font-size:10px;color:var(--amber)">(est.)</span></span>`
     : `<span style="color:var(--text-secondary);margin-right:8px">${e.currency} ${e.dps.toFixed(4)} \xd7 ${fmt(e.sharesHeld)}</span>`;
+  const primaryLabel = payStr ? `Pay ${payStr}` : `Ex ${exStr}`;
   return `<div class="div-entry">
-    <span style="min-width:78px;${urgency}">Ex ${exStr}</span>
+    <span style="min-width:78px;${urgency}">${primaryLabel}</span>
     <span style="flex:1">${symWithName(e.sym)} ${srcBadge}</span>
     ${dpsDetail}
     <span style="font-weight:500;color:var(--green)">S$${fmt(e.grossSGD)}</span>
-    <span style="min-width:82px;color:var(--text-secondary);text-align:right;padding-left:10px">Pay ${payStr}</span>
+    <span style="min-width:82px;color:var(--text-secondary);text-align:right;padding-left:10px">Ex ${exStr}</span>
   </div>`;
 }
 
@@ -11474,7 +11508,7 @@ function renderUpcomingAnnounced() {
   // "Not yet paid" rather than "ex-date in future" — see renderDashboardUpcoming
   const upcoming = Object.values(entries)
     .filter(e => (e.payDate ? e.payDate > now : e.exDate > now) && (e.source === 'dividends.sg' || e.source === 'manual'))
-    .sort((a, b) => a.exDate - b.exDate);
+    .sort((a, b) => (a.payDate || a.exDate) - (b.payDate || b.exDate));
 
   // Fallback: Yahoo-sourced entries for symbols dividends.sg hasn't covered.
   // Shown within a short grace window either side of now (see helper above) —
@@ -11482,20 +11516,24 @@ function renderUpcomingAnnounced() {
   // that are already at/just past ex-date but not yet on dividends.sg.
   const yahooFallback = getYahooFallbackUpcomingDivs();
 
-  // Sort the MERGED list by ex-date — sorting each source separately and
-  // concatenating (previous bug, fixed 2026-06-27) put every Yahoo-fallback
-  // entry after every dividends.sg entry regardless of actual date, e.g.
-  // Y03 going ex well before most dividends.sg entries still sorted near
-  // the bottom of the card instead of near the top.
-  const combined = [...upcoming, ...yahooFallback].sort((a, b) => a.exDate - b.exDate);
+  // Sort the MERGED list by pay date (falling back to ex date for entries
+  // without a confirmed pay date yet) — matches renderDashboardUpcoming()'s
+  // convention, and matches this card's "Upcoming pay dates" title. Sorting
+  // each source separately and concatenating (previous bug, fixed
+  // 2026-06-27) put every Yahoo-fallback entry after every dividends.sg
+  // entry regardless of actual date, e.g. Y03 paying well before most
+  // dividends.sg entries still sorted near the bottom of the card.
+  const combined = [...upcoming, ...yahooFallback].sort((a, b) => (a.payDate || a.exDate) - (b.payDate || b.exDate));
 
   // Real "next 60 days" total — the card's title says "next 60 days" but the
   // list above it isn't actually capped to that window (it shows everything
   // "not yet paid", which for declared dividends.sg/manual entries can run
   // well beyond 60 days out). Added 2026-06-28 so the title's claim is
   // backed by an actual number rather than just being descriptive text.
+  // Window basis is pay date (falling back to ex date), matching the sort
+  // above and the card's pay-date framing.
   const sixtyDaysOut = new Date(now.getTime() + 60 * 86400000);
-  const within60 = combined.filter(e => e.exDate <= sixtyDaysOut);
+  const within60 = combined.filter(e => (e.payDate || e.exDate) <= sixtyDaysOut);
   const total60  = within60.reduce((s, e) => s + e.grossSGD, 0);
   const totalText = `Total: S$${fmt(total60)} next 60 days (${within60.length} payment${within60.length === 1 ? '' : 's'})`;
   if (totalEl)     totalEl.textContent     = combined.length ? totalText : '';
@@ -11503,7 +11541,7 @@ function renderUpcomingAnnounced() {
 
   if (!combined.length) {
     const emptyMsg = `<p style="color:var(--text-secondary);font-size:13px;padding:16px 0">
-      No declared upcoming ex-dividend dates found.
+      No declared upcoming pay dates found.
       Click <strong>Refresh</strong> to fetch live announcements from SGX and Yahoo Finance.
     </p>`;
     el.innerHTML = emptyMsg;
@@ -11657,76 +11695,142 @@ function renderDeclaredTable(h) {
     `${upcoming.length} declaration${upcoming.length !== 1 ? 's' : ''} &nbsp;|&nbsp; Total expected: <strong style="color:var(--green)">S$${fmt(totalSGD, 2)}</strong>`;
 }
 
+// ─── SHARED: PER-HOLDING DIVIDEND YIELD ──────────────────────────────
+// Single source of truth for per-symbol dividend yield figures, used by
+// both renderProjTickerTable() (Dividends tab) and renderHoldings()
+// (Holdings tab "Div Yield" column) so there's exactly one implementation.
+// Previously duplicated independently inside renderProjTickerTable()'s
+// per-row map — same shape of risk as the parseViewPage() cache-miss bug
+// from 2026-08-06: two copies of the same math that could silently drift.
+//
+// IMPORTANT — the two yield figures use DELIBERATELY DIFFERENT methodologies:
+//   .yoc (yield on cost)     — FORWARD-projected: last known DPS (declared >
+//                              live Yahoo history > type-based estimate),
+//                              annualised by detected payment frequency,
+//                              ÷ what you paid. Answers "what should this
+//                              position pay me over the next 12 months,
+//                              relative to my cost?" — inherently personal,
+//                              no external site can show this for you.
+//   .yon (yield on current
+//        value)               — TRAILING actual: real dividends received
+//                              in the last 12 months on shares you still
+//                              hold (via computeDividendsSplit()'s FIFO
+//                              attribution — same engine and same T12M
+//                              window already used by the currency-summary
+//                              table's "Div yield on value (T12M)" column),
+//                              ÷ today's value. This is what tracks close
+//                              to external "current yield" trackers like
+//                              dividends.sg / Yahoo / Growbeansprout.
+// Mixing a forward estimate with a trailing actual in the same function
+// looks odd at first, but they answer genuinely different questions and
+// this pairing was chosen deliberately (2026-08-15 session, prompted by
+// C6L's forward estimate landing well above every external reference site
+// — see session notes). Do not "fix" .yon back to a forward projection
+// without updating the UI labels that now specifically say "T12M".
+//
+// Returns null fields throughout for NON_DIVIDEND_SYMS tickers — callers
+// should render '—' rather than treat that as a zero yield. .yon can also
+// be null on a genuine payer simply because no dividend has landed on your
+// still-held shares in the last 12 months yet (e.g. a recent purchase, or
+// mid-way through a long payment cycle) — that's expected, not a bug.
+function computeHoldingDividendYield(sym, hld) {
+  if (NON_DIVIDEND_SYMS.has(sym) || !hld) {
+    return { annualDPS: null, projLocal: null, projSGD: null, yoc: null, yon: null,
+             yon12mReceivedSGD: null, src: null, freqLabel: null, nextExDate: null,
+             dpsUsed: null, isDeclared: false };
+  }
+
+  const now      = new Date();
+  const ticker   = getYahooTicker(sym, hld.exch);
+  const cached   = ticker ? divCache[ticker] : null;
+  const hasLive  = !!(cached?.dividends?.length);
+
+  // Frequency
+  let freqMonths = 6;
+  let lastDPS    = 0;
+  let nextExDate = null;
+
+  if (hasLive && cached.dividends.length >= 2) {
+    const recent = cached.dividends.slice(-4);
+    const gaps   = [];
+    for (let i = 1; i < recent.length; i++)
+      gaps.push((recent[i].date - recent[i-1].date) / (86400000 * 30));
+    const avgGap = gaps.reduce((a, b) => a + b, 0) / gaps.length;
+    freqMonths   = avgGap < 2 ? 1 : avgGap < 4 ? 3 : avgGap < 8 ? 6 : 12;
+    lastDPS      = cached.dividends.at(-1).amount;
+    // Apply permanent override if set
+    const lastExStr = cached.dividends.at(-1).date.toISOString().slice(0, 10);
+    lastDPS = divOverrideDps(divOverrideKey(sym, lastExStr)) ?? lastDPS;
+    // Estimate next ex-date
+    const lastEx = cached.dividends.at(-1).date;
+    nextExDate   = new Date(lastEx);
+    nextExDate.setMonth(nextExDate.getMonth() + freqMonths);
+  } else {
+    freqMonths = 6;
+    lastDPS    = hld.curPrice * divYield(hld.type) / (12 / freqMonths);
+    nextExDate = new Date(now);
+    nextExDate.setMonth(nextExDate.getMonth() + freqMonths);
+  }
+
+  // Check if a declared entry overrides the estimate
+  const declared    = announcedDivCache[sym];
+  const declaredDPS = declared ? declared.dps : null;
+  const usedDPS     = declaredDPS ?? lastDPS;
+
+  const annualDPS   = usedDPS * (12 / freqMonths);
+  const projLocal   = hld.shares * annualDPS;
+  const projSGD     = toSGD(projLocal, hld.ccy);
+
+  // Yield on cost — forward-projected, use costSGD from holding (WAC, already in SGD)
+  const costSGD     = hld.costSGD || toSGD(hld.shares * (hld.avgCost ?? hld.curPrice), hld.ccy);
+  const yoc         = costSGD > 0 ? projSGD / costSGD * 100 : null;
+
+  // Yield on current value — TRAILING 12-month actual, not forward-projected.
+  // computeDividendsSplit(sym, cutoff).unrealised = real dividends received,
+  // FIFO-attributed to shares still held today, within the lookback window.
+  // Falls back to null (not 0%) when nothing's landed in the window yet —
+  // same "don't show a fabricated number" principle as the NON_DIVIDEND_SYMS
+  // guard above, just for a different reason (no data in-window vs. no
+  // dividend at all).
+  const cutoff12m = new Date();
+  cutoff12m.setFullYear(cutoff12m.getFullYear() - 1);
+  const split12   = computeDividendsSplit(sym, cutoff12m);
+  const yon       = (hld.valueSGD > 0 && split12.unrealised > 0) ? split12.unrealised / hld.valueSGD * 100 : null;
+
+  const freqLabel   = freqMonths === 1 ? 'Monthly' : freqMonths === 3 ? 'Quarterly' : freqMonths === 6 ? 'Semi-ann' : 'Annual';
+  const src         = hasLive ? 'live' : 'est';
+
+  return { annualDPS, projLocal, projSGD, yoc, yon, yon12mReceivedSGD: split12.unrealised || null,
+           src, freqLabel, nextExDate, dpsUsed: usedDPS, isDeclared: declaredDPS != null };
+}
+
 // ─── PROJECTED DIVIDEND PER TICKER ───────────────────────────────────
 // Per-ticker table: next estimated ex-date, last DPS, frequency,
-// annual DPS, projected income (local + SGD), yield on cost, yield on NAV.
+// annual DPS, projected income (local + SGD), forward yield on cost,
+// trailing-12mo yield on NAV (see computeHoldingDividendYield doc comment
+// for why these two use different methodologies).
 function renderProjTickerTable(projByPos, h) {
   const tbody  = document.getElementById('div-proj-body');
   const footer = document.getElementById('div-proj-footer');
   if (!tbody) return;
 
-  const now = new Date();
-
   // Build rows — one per holding that has a projected income entry
-  const rows = Object.entries(projByPos)
-    .map(([sym, annualSGD]) => {
+  const rows = Object.keys(projByPos)
+    .map(sym => {
       const hld = h[sym];
       if (!hld) return null;
 
-      const ticker   = getYahooTicker(sym, hld.exch);
-      const cached   = ticker ? divCache[ticker] : null;
-      const hasLive  = !!(cached?.dividends?.length);
+      const y = computeHoldingDividendYield(sym, hld);
+      if (y.annualDPS == null) return null; // non-dividend symbol — shouldn't occur here since projByPos already excludes these, but guard regardless
 
-      // Frequency
-      let freqMonths = 6;
-      let lastDPS    = 0;
-      let nextExDate = null;
+      const nextExStr = y.nextExDate ? y.nextExDate.toISOString().slice(0, 10) : '—';
+      const dpsLabel   = y.isDeclared
+        ? `<span style="color:var(--green);font-weight:500" title="Declared by company">${hld.ccy} ${y.dpsUsed.toFixed(4)} ✓</span>`
+        : `${hld.ccy} ${y.dpsUsed.toFixed(4)}`;
 
-      if (hasLive && cached.dividends.length >= 2) {
-        const recent = cached.dividends.slice(-4);
-        const gaps   = [];
-        for (let i = 1; i < recent.length; i++)
-          gaps.push((recent[i].date - recent[i-1].date) / (86400000 * 30));
-        const avgGap = gaps.reduce((a, b) => a + b, 0) / gaps.length;
-        freqMonths   = avgGap < 2 ? 1 : avgGap < 4 ? 3 : avgGap < 8 ? 6 : 12;
-        lastDPS      = cached.dividends.at(-1).amount;
-        // Apply permanent override if set
-        const lastExStr = cached.dividends.at(-1).date.toISOString().slice(0, 10);
-        lastDPS = divOverrideDps(divOverrideKey(sym, lastExStr)) ?? lastDPS;
-        // Estimate next ex-date
-        const lastEx = cached.dividends.at(-1).date;
-        nextExDate   = new Date(lastEx);
-        nextExDate.setMonth(nextExDate.getMonth() + freqMonths);
-      } else {
-        freqMonths = 6;
-        lastDPS    = hld.curPrice * divYield(hld.type) / (12 / freqMonths);
-        nextExDate = new Date(now);
-        nextExDate.setMonth(nextExDate.getMonth() + freqMonths);
-      }
-
-      // Check if a declared entry overrides the estimate
-      const declared    = announcedDivCache[sym];
-      const declaredDPS = declared ? declared.dps : null;
-      const usedDPS     = declaredDPS ?? lastDPS;
-
-      const annualDPS   = usedDPS * (12 / freqMonths);
-      const projLocal   = hld.shares * annualDPS;
-      const projSGD     = toSGD(projLocal, hld.ccy);
-
-      // Yield on cost — use costSGD from holding (WAC, already in SGD)
-      const costSGD     = hld.costSGD || toSGD(hld.shares * (hld.avgCost ?? hld.curPrice), hld.ccy);
-      const yoc         = costSGD > 0 ? projSGD / costSGD * 100 : null;
-      // Yield on NAV (current value)
-      const yon         = hld.valueSGD > 0 ? projSGD / hld.valueSGD * 100 : null;
-
-      const freqLabel   = freqMonths === 1 ? 'Monthly' : freqMonths === 3 ? 'Quarterly' : freqMonths === 6 ? 'Semi-ann' : 'Annual';
-      const nextExStr   = nextExDate ? nextExDate.toISOString().slice(0, 10) : '—';
-      const dpsLabel    = declaredDPS != null
-        ? `<span style="color:var(--green);font-weight:500" title="Declared by company">${hld.ccy} ${usedDPS.toFixed(4)} ✓</span>`
-        : `${hld.ccy} ${usedDPS.toFixed(4)}`;
-      const src         = hasLive ? 'live' : 'est';
-
-      return { sym, hld, nextExStr, nextExDate, freqLabel, dpsLabel, annualDPS, projLocal, projSGD, yoc, yon, src, annualSGD };
+      return { sym, hld, nextExStr, nextExDate: y.nextExDate, freqLabel: y.freqLabel, dpsLabel,
+               annualDPS: y.annualDPS, projLocal: y.projLocal, projSGD: y.projSGD,
+               yoc: y.yoc, yon: y.yon, yon12mReceivedSGD: y.yon12mReceivedSGD, src: y.src };
     })
     .filter(Boolean)
     .sort((a, b) => b.projSGD - a.projSGD);
@@ -11744,6 +11848,13 @@ function renderProjTickerTable(projByPos, h) {
     const yonStr = r.yon != null ? r.yon.toFixed(2) + '%' : '—';
     const yocCls = r.yoc != null ? (r.yoc >= 4 ? 'up' : 'neutral') : '';
     const yonCls = r.yon != null ? (r.yon >= 3 ? 'up' : 'neutral') : '';
+    // yon is trailing-12mo actual (see computeHoldingDividendYield) — independent
+    // of the Source badge below, which describes the DPS estimate feeding the
+    // forward columns only. A "live" Source with a "—" yon just means nothing's
+    // landed on your still-held shares in the last 12 months yet, not missing data.
+    const yonTitle = r.yon != null
+      ? `SGD ${fmt(r.yon12mReceivedSGD, 0)} actually received on still-held shares, trailing 12 months`
+      : `No dividends received on still-held shares in the trailing 12 months`;
     return `<tr>
       <td>${symWithName(r.sym)}</td>
       <td style="color:var(--text-secondary)">${r.hld.exch}</td>
@@ -11755,7 +11866,7 @@ function renderProjTickerTable(projByPos, h) {
       <td style="text-align:right">${r.hld.ccy} ${fmt(r.projLocal, 0)}</td>
       <td style="text-align:right;color:var(--green);font-weight:500">S$${fmt(r.projSGD, 0)}</td>
       <td style="text-align:right" class="${yocCls}">${yocStr}</td>
-      <td style="text-align:right" class="${yonCls}">${yonStr}</td>
+      <td style="text-align:right" class="${yonCls}" title="${escHtml(yonTitle)}">${yonStr}</td>
       <td><span class="price-badge ${r.src==='live'?'price-live':'price-est'}">${r.src}</span></td>
     </tr>`;
   }).join('');
@@ -14922,11 +15033,11 @@ window.addEventListener('afterprint', restoreAfterReport);
   </div>
 </div>
 
-<!-- Upcoming ex-dividend dates — full list modal -->
+<!-- Upcoming pay dates — full list modal -->
 <div class="modal-overlay" id="upcoming-div-modal">
   <div class="modal" style="max-width:660px">
     <div class="modal-title">
-      <span>Upcoming ex-dividend dates — full list</span>
+      <span>Upcoming pay dates — full list</span>
       <button class="modal-close" onclick="closeModal('upcoming-div-modal')"><i class="ti ti-x"></i></button>
     </div>
     <div id="div-upcoming-total-full" style="font-size:12px;color:var(--text-secondary);margin-bottom:8px"></div>
