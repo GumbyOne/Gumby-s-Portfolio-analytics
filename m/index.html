@@ -74,7 +74,8 @@
     padding: 9px 0; border-bottom: 0.5px solid var(--border); font-size: 13px;
   }
   .ccy-row:last-child, .pos-row:last-child { border-bottom: none; }
-  .pos-sym { font-weight: 600; font-family: 'SF Mono', monospace; font-size: 12.5px; }
+  .pos-sym { font-weight: 600; font-size: 13px; }
+  .pos-ticker { font-size: 10px; color: var(--text-secondary); font-family: 'SF Mono', monospace; margin-top: 1px; }
   .pos-right { text-align: right; }
   .pos-val { font-weight: 500; }
   .pos-chg { font-size: 11px; margin-top: 1px; }
@@ -172,6 +173,10 @@ const LIVE_CACHE_KEY = 'pa_mobile_live_cache';
 const fmtSGD = n => 'S$' + Math.round(n).toLocaleString('en-SG');
 const fmtPct = n => (n >= 0 ? '+' : '') + n.toFixed(2) + '%';
 const fmtDate = ts => new Date(ts).toLocaleString('en-SG', { day:'numeric', month:'short', hour:'2-digit', minute:'2-digit' });
+// Company names are external (Yahoo) data going into innerHTML — escape them.
+// Ticker/currency codes were always safe (alphanumeric, from our own encoded
+// snapshot), which is why nothing here was escaped before this.
+const escHtml = s => String(s).replace(/[&<>"']/g, c => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' }[c]));
 
 // ─── Fetch a single ticker via the 3-tier CORS proxy chain ──────────────
 async function fetchTicker(ticker) {
@@ -192,7 +197,11 @@ async function fetchTicker(ticker) {
       let prevClose = closes.length >= 2 ? closes[closes.length - 2] : price;
       // Yahoo returns LSE prices in pence — same normalisation as desktop app.
       if (currency === 'GBp') { currency = 'GBP'; price /= 100; prevClose /= 100; }
-      return { ok: true, price, prevClose, currency };
+      // Company name — same field the desktop app reads (meta.shortName,
+      // falling back to meta.longName) from this exact same chart response.
+      // Free: no extra request, just one more field off data already fetched.
+      const shortName = result?.meta?.shortName || result?.meta?.longName || '';
+      return { ok: true, price, prevClose, currency, shortName };
     } catch (e) { /* try next proxy */ }
   }
   return { ok: false };
@@ -270,6 +279,7 @@ async function computeLive(snap) {
     byCcy[ccyKey] = (byCcy[ccyKey] || 0) + valueSGD;
     return {
       sym: h.sym,
+      name: (r && r.ok) ? (r.shortName || '') : '', // '' falls back to sym in renderLive
       valueSGD, // kept for sort order, not displayed
       dayChgSGD: valueSGD - prevValueSGD,
       dayChgPct: prevValueSGD > 0 ? (valueSGD - prevValueSGD) / prevValueSGD * 100 : 0,
@@ -318,14 +328,29 @@ function renderLive(live, asOf, isStale) {
     .map(([ccy, val]) => `<div class="ccy-row"><span>${ccy}</span><span>${fmtSGD(val)} <span style="color:var(--text-secondary)">(${(val/live.nav*100).toFixed(0)}%)</span></span></div>`)
     .join('');
 
-  document.getElementById('positions-list').innerHTML = live.positions.map(p => `
+  document.getElementById('positions-list').innerHTML = live.positions.map(p => {
+    // Company name is primary when Yahoo resolved one (same meta.shortName /
+    // longName field the desktop app uses); falls back to the ticker code as
+    // primary when it isn't available (fetch failed, frozen/manually-priced
+    // position with no live ticker, or Yahoo just didn't return a name for
+    // that listing) — never blank, and the ticker is never fully lost: it
+    // either IS the primary line, or sits as a small line underneath.
+    const hasName = !!p.name;
+    const primaryText = escHtml(hasName ? p.name : p.sym);
+    const primaryStyle = hasName ? '' : `style="font-family:'SF Mono',monospace"`;
+    const tickerSub = hasName ? `<div class="pos-ticker">${escHtml(p.sym)}</div>` : '';
+    return `
     <div class="pos-row">
-      <span class="pos-sym">${p.sym}${p.live ? '' : ' <span style="color:var(--text-secondary);font-weight:400">(frozen)</span>'}</span>
+      <span>
+        <span class="pos-sym" ${primaryStyle}>${primaryText}</span>${p.live ? '' : ' <span style="color:var(--text-secondary);font-weight:400;font-size:11px">(frozen)</span>'}
+        ${tickerSub}
+      </span>
       <span class="pos-right">
         <div class="pos-val">${p.live ? p.ccy + ' ' + p.eodClose.toFixed(3) : '—'}</div>
         <div class="pos-chg ${p.dayChgSGD >= 0 ? 'up' : 'down'}">${p.live ? (p.dayChgSGD >= 0 ? '+' : '-') + fmtSGD(Math.abs(p.dayChgSGD)).slice(2) + '  ' + fmtPct(p.dayChgPct) : '—'}</div>
       </span>
-    </div>`).join('');
+    </div>`;
+  }).join('');
 
   const statusEl = document.getElementById('status-line');
   if (isStale) {
