@@ -1636,6 +1636,30 @@
         <div style="position:relative;width:100%;height:200px"><canvas id="divChart"></canvas></div>
       </div>
 
+      <!-- Projected dividend per ticker -->
+      <div class="chart-card">
+        <div class="chart-title">Projected annual dividend — per ticker
+          <span class="chart-title-sub">next 12 months · declared DPS used where available · yield shown both forward-projected (fwd) and trailing-actual (T12M)</span>
+        </div>
+        <div class="table-wrap">
+          <table class="data-table" id="div-proj-table">
+            <thead><tr>
+              <th>Symbol</th>
+              <th>Exchange</th>
+              <th style="text-align:right">Shares</th>
+              <th style="text-align:right" title="Bold: estimated next ex-date. Small: detected payment frequency.">Next ex (est.)</th>
+              <th style="text-align:right" title="Last known or declared DPS, with data-source badge.">DPS</th>
+              <th style="text-align:right" title="Bold: projected total income over the next 12 months, in local currency. Small: per-share annual DPS this is based on.">Projected (local)</th>
+              <th style="text-align:right">Projected (SGD)</th>
+              <th style="text-align:right" title="Bold: forward-projected, next 12 months ÷ cost basis. Small: trailing actual (T12M) ÷ cost basis.">Yield on cost</th>
+              <th style="text-align:right" title="Bold: forward-projected, next 12 months ÷ current value. Small: trailing actual (T12M) ÷ current value — matches external trackers (dividends.sg, Yahoo, etc.) far more closely than the forward figure does.">Yield on NAV</th>
+            </tr></thead>
+            <tbody id="div-proj-body"></tbody>
+          </table>
+        </div>
+        <div id="div-proj-footer" style="padding:8px 0 2px;font-size:12px;color:var(--text-secondary)"></div>
+      </div>
+
       <!-- Dividend income by currency -->
       <div class="chart-card">
         <div class="chart-title">Dividend income by currency
@@ -1672,33 +1696,6 @@
         </div>
         <div id="div-declared-footer" style="padding:8px 0 2px;font-size:12px;color:var(--text-secondary)"></div>
         <div id="div-manual-panel"></div>
-      </div>
-
-      <!-- Projected dividend per ticker -->
-      <div class="chart-card">
-        <div class="chart-title">Projected annual dividend — per ticker
-          <span class="chart-title-sub">next 12 months · declared DPS used where available</span>
-        </div>
-        <div class="table-wrap">
-          <table class="data-table" id="div-proj-table">
-            <thead><tr>
-              <th>Symbol</th>
-              <th>Exchange</th>
-              <th style="text-align:right">Shares</th>
-              <th style="text-align:right">Next ex-date (est.)</th>
-              <th style="text-align:right">DPS (last / declared)</th>
-              <th style="text-align:right">Freq</th>
-              <th style="text-align:right">Annual DPS</th>
-              <th style="text-align:right">Projected (local)</th>
-              <th style="text-align:right">Projected (SGD)</th>
-              <th style="text-align:right" title="Forward-projected: this column's own annual DPS estimate ÷ cost basis.">Yield on cost (fwd)</th>
-              <th style="text-align:right" title="Trailing actual: real dividends received on shares still held in the last 12 months ÷ current value. Independent of this table's forward projection — matches external trackers (dividends.sg, Yahoo, etc.) far more closely than annualising the last payment would.">Yield on NAV (T12M)</th>
-              <th>Source</th>
-            </tr></thead>
-            <tbody id="div-proj-body"></tbody>
-          </table>
-        </div>
-        <div id="div-proj-footer" style="padding:8px 0 2px;font-size:12px;color:var(--text-secondary)"></div>
       </div>
 
       <!-- Full history table -->
@@ -11736,8 +11733,8 @@ function renderDeclaredTable(h) {
 function computeHoldingDividendYield(sym, hld) {
   if (NON_DIVIDEND_SYMS.has(sym) || !hld) {
     return { annualDPS: null, projLocal: null, projSGD: null, yoc: null, yon: null,
-             yon12mReceivedSGD: null, src: null, freqLabel: null, nextExDate: null,
-             dpsUsed: null, isDeclared: false };
+             yocT12m: null, yonFwd: null, yon12mReceivedSGD: null, src: null,
+             freqLabel: null, nextExDate: null, dpsUsed: null, isDeclared: false };
   }
 
   const now      = new Date();
@@ -11797,10 +11794,22 @@ function computeHoldingDividendYield(sym, hld) {
   const split12   = computeDividendsSplit(sym, cutoff12m);
   const yon       = (hld.valueSGD > 0 && split12.unrealised > 0) ? split12.unrealised / hld.valueSGD * 100 : null;
 
+  // The other two corners of the fwd/trailing x cost/NAV matrix — added
+  // 2026-08-16. Both reuse numbers already computed above (projSGD, split12)
+  // rather than recomputing anything, so this is cheap.
+  //   yocT12m = trailing actual ÷ cost   — same split12 as .yon, ÷ costSGD instead
+  //   yonFwd  = forward projected ÷ NAV  — same projSGD as .yoc, ÷ valueSGD instead
+  //             (this is what .yon itself used to mean before the 2026-08-15
+  //             switch to trailing-actual — now exposed as its own field
+  //             instead of overloading .yon)
+  const yocT12m   = (costSGD > 0 && split12.unrealised > 0) ? split12.unrealised / costSGD * 100 : null;
+  const yonFwd    = hld.valueSGD > 0 ? projSGD / hld.valueSGD * 100 : null;
+
   const freqLabel   = freqMonths === 1 ? 'Monthly' : freqMonths === 3 ? 'Quarterly' : freqMonths === 6 ? 'Semi-ann' : 'Annual';
   const src         = hasLive ? 'live' : 'est';
 
-  return { annualDPS, projLocal, projSGD, yoc, yon, yon12mReceivedSGD: split12.unrealised || null,
+  return { annualDPS, projLocal, projSGD, yoc, yon, yocT12m, yonFwd,
+           yon12mReceivedSGD: split12.unrealised || null,
            src, freqLabel, nextExDate, dpsUsed: usedDPS, isDeclared: declaredDPS != null };
 }
 
@@ -11830,13 +11839,14 @@ function renderProjTickerTable(projByPos, h) {
 
       return { sym, hld, nextExStr, nextExDate: y.nextExDate, freqLabel: y.freqLabel, dpsLabel,
                annualDPS: y.annualDPS, projLocal: y.projLocal, projSGD: y.projSGD,
-               yoc: y.yoc, yon: y.yon, yon12mReceivedSGD: y.yon12mReceivedSGD, src: y.src };
+               yoc: y.yoc, yon: y.yon, yocT12m: y.yocT12m, yonFwd: y.yonFwd,
+               yon12mReceivedSGD: y.yon12mReceivedSGD, src: y.src };
     })
     .filter(Boolean)
     .sort((a, b) => b.projSGD - a.projSGD);
 
   if (!rows.length) {
-    tbody.innerHTML = `<tr><td colspan="12" style="text-align:center;padding:20px;color:var(--text-secondary)">No projection data — fetch prices first.</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="9" style="text-align:center;padding:20px;color:var(--text-secondary)">No projection data — fetch prices first.</td></tr>`;
     if (footer) footer.textContent = '';
     return;
   }
@@ -11844,30 +11854,33 @@ function renderProjTickerTable(projByPos, h) {
   let totalProjSGD = 0;
   tbody.innerHTML = rows.map(r => {
     totalProjSGD += r.projSGD;
-    const yocStr = r.yoc != null ? r.yoc.toFixed(2) + '%' : '—';
-    const yonStr = r.yon != null ? r.yon.toFixed(2) + '%' : '—';
-    const yocCls = r.yoc != null ? (r.yoc >= 4 ? 'up' : 'neutral') : '';
-    const yonCls = r.yon != null ? (r.yon >= 3 ? 'up' : 'neutral') : '';
-    // yon is trailing-12mo actual (see computeHoldingDividendYield) — independent
-    // of the Source badge below, which describes the DPS estimate feeding the
-    // forward columns only. A "live" Source with a "—" yon just means nothing's
-    // landed on your still-held shares in the last 12 months yet, not missing data.
-    const yonTitle = r.yon != null
+    const yocStr    = r.yoc != null ? r.yoc.toFixed(2) + '%' : '—';
+    const yonStr    = r.yon != null ? r.yon.toFixed(2) + '%' : '—';
+    const yocT12Str = r.yocT12m != null ? r.yocT12m.toFixed(2) + '%' : '—';
+    const yonFwdStr = r.yonFwd != null ? r.yonFwd.toFixed(2) + '%' : '—';
+    // yon / yocT12m are trailing-12mo actual (see computeHoldingDividendYield) —
+    // independent of the DPS source badge, which describes the estimate
+    // feeding the forward (bold) figures only. A "live" DPS source with a
+    // "—" trailing figure just means nothing's landed on your still-held
+    // shares in the last 12 months yet, not missing data.
+    const trailingTitle = (r.yon != null || r.yocT12m != null)
       ? `SGD ${fmt(r.yon12mReceivedSGD, 0)} actually received on still-held shares, trailing 12 months`
       : `No dividends received on still-held shares in the trailing 12 months`;
+    // DPS cell carries its own source badge inline (was a separate "Source"
+    // column) — declared already gets a green checkmark from dpsLabel, so
+    // the badge only needs to appear for the live/est cases.
+    const srcBadge = r.dpsLabel.includes('✓') ? '' :
+      ` <span class="price-badge ${r.src==='live'?'price-live':'price-est'}" style="font-size:9px">${r.src}</span>`;
     return `<tr>
       <td>${symWithName(r.sym)}</td>
       <td style="color:var(--text-secondary)">${r.hld.exch}</td>
       <td style="text-align:right">${fmt(r.hld.shares)}</td>
-      <td style="text-align:right;color:var(--text-secondary);white-space:nowrap">${r.nextExStr}</td>
-      <td style="text-align:right">${r.dpsLabel}</td>
-      <td style="text-align:right;color:var(--text-secondary)">${r.freqLabel}</td>
-      <td style="text-align:right">${r.hld.ccy} ${r.annualDPS.toFixed(4)}</td>
-      <td style="text-align:right">${r.hld.ccy} ${fmt(r.projLocal, 0)}</td>
+      <td style="text-align:right;white-space:nowrap">${r.nextExStr}<br><span style="font-size:10px;color:var(--text-secondary)">${r.freqLabel}</span></td>
+      <td style="text-align:right;white-space:nowrap">${r.dpsLabel}${srcBadge}</td>
+      <td style="text-align:right">${r.hld.ccy} ${fmt(r.projLocal, 0)}<br><span style="font-size:10px;color:var(--text-secondary)">${r.hld.ccy} ${r.annualDPS.toFixed(4)}/sh</span></td>
       <td style="text-align:right;color:var(--green);font-weight:500">S$${fmt(r.projSGD, 0)}</td>
-      <td style="text-align:right" class="${yocCls}">${yocStr}</td>
-      <td style="text-align:right" class="${yonCls}" title="${escHtml(yonTitle)}">${yonStr}</td>
-      <td><span class="price-badge ${r.src==='live'?'price-live':'price-est'}">${r.src}</span></td>
+      <td style="text-align:right"><span class="${r.yoc!=null?(r.yoc>=4?'up':'neutral'):''}" style="font-weight:600">${yocStr}</span><br><span class="${r.yocT12m!=null?(r.yocT12m>=4?'up':'neutral'):''}" style="font-size:10px" title="${escHtml(trailingTitle)}">${yocT12Str} T12M</span></td>
+      <td style="text-align:right"><span class="${r.yonFwd!=null?(r.yonFwd>=3?'up':'neutral'):''}" style="font-weight:600">${yonFwdStr}</span><br><span class="${r.yon!=null?(r.yon>=3?'up':'neutral'):''}" style="font-size:10px" title="${escHtml(trailingTitle)}">${yonStr} T12M</span></td>
     </tr>`;
   }).join('');
 
@@ -14401,6 +14414,35 @@ function _renderStockDetail(sym, exch) {
       ${k.sub ? `<div class="metric-sub">${k.sub}</div>` : ''}
     </div>`).join('');
 
+  // ── Dividend yield card — hidden for closed positions and non-payers ──
+  // Reuses computeHoldingDividendYield(), same function backing the
+  // Holdings tab column and the Dividends tab per-ticker table, so this
+  // never drifts from either. Requires an open position (h) — closed
+  // positions have no current cost/value basis for a yield to be against.
+  const sdYieldCard = document.getElementById('sd-yield-card');
+  const dy = (!isClosed && h) ? computeHoldingDividendYield(sym, h) : null;
+  if (!dy || dy.yoc == null) {
+    sdYieldCard.classList.add('hidden');
+  } else {
+    sdYieldCard.classList.remove('hidden');
+    const pct = v => v != null ? v.toFixed(2) + '%' : '—';
+    const trailingSub = dy.yon12mReceivedSGD != null
+      ? `S$${fmt(dy.yon12mReceivedSGD, 0)} received, trailing 12mo`
+      : 'nothing received in trailing 12mo';
+    const yKpis = [
+      { label: 'Yield on cost (fwd)', val: pct(dy.yoc),     cls: dy.yoc     != null && dy.yoc     >= 4 ? 'up' : '', sub: 'next 12mo projected ÷ cost' },
+      { label: 'Yield on cost (T12M)', val: pct(dy.yocT12m), cls: dy.yocT12m != null && dy.yocT12m >= 4 ? 'up' : '', sub: trailingSub },
+      { label: 'Yield on NAV (fwd)',  val: pct(dy.yonFwd),  cls: dy.yonFwd  != null && dy.yonFwd  >= 3 ? 'up' : '', sub: 'next 12mo projected ÷ current value' },
+      { label: 'Yield on NAV (T12M)', val: pct(dy.yon),     cls: dy.yon     != null && dy.yon     >= 3 ? 'up' : '', sub: trailingSub },
+    ];
+    document.getElementById('sd-yield-kpis').innerHTML = yKpis.map(k => `
+      <div class="metric">
+        <div class="metric-label">${k.label}</div>
+        <div class="metric-value ${k.cls||''}">${k.val}</div>
+        <div class="metric-sub">${k.sub}</div>
+      </div>`).join('');
+  }
+
   // ── Price chart ──────────────────────────────────────────────────
   if (_sdChart) { _sdChart.destroy(); _sdChart = null; }
   const chartCard = document.getElementById('sd-chart-card');
@@ -15160,6 +15202,12 @@ window.addEventListener('afterprint', restoreAfterReport);
 
     <!-- KPI strip -->
     <div class="metrics-grid" id="sd-kpis" style="margin:0 0 14px"></div>
+
+    <!-- Dividend yield — hidden for closed positions and non-dividend payers -->
+    <div class="chart-card" id="sd-yield-card" style="margin-bottom:14px">
+      <div class="chart-title">Dividend yield <span class="chart-title-sub">forward-projected (fwd) vs. trailing actual (T12M) — see Dividends tab for methodology</span></div>
+      <div class="metrics-grid" id="sd-yield-kpis"></div>
+    </div>
 
     <!-- Price chart -->
     <div class="chart-card" id="sd-chart-card" style="margin-bottom:14px">
