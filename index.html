@@ -3852,10 +3852,55 @@ function processPortfolio(skipFetch = false) {
 // have failed. See PRICE_HISTORY_CACHE_KEY below for the next fallback
 // tier (last-known-good data from localStorage), used only at that point.
 const CORS_PROXIES = [
-  url => `https://corsproxy.io/?${encodeURIComponent(url)}`,
+  // 2026-08-21: corsproxy.io deprecated the anonymous/legacy query-string
+  // format (bare `?<url>`) — it now returns a fast, explicit 403 with
+  // {"error":"keyless_legacy_url","message":"Anonymous legacy proxy URLs
+  // are no longer supported"} for EVERY request, regardless of target.
+  // Confirmed via direct A/B test against Yahoo: old format 403s, adding
+  // the `url=` parameter succeeds (200, correct price parsed) — matches
+  // corsproxy.io's own current docs, which have used `?url=` for a while.
+  // This one line is shared by every caller (price fetch, FX, both
+  // dividends.sg fetches), so the fix applies everywhere at once.
+  url => `https://corsproxy.io/?url=${encodeURIComponent(url)}`,
   url => `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`,
   url => `https://api.codetabs.com/v1/proxy/?quest=${encodeURIComponent(url)}`,
 ];
+
+// ─── SHARED: fetch through the CORS_PROXIES chain, trying each in turn ───
+// Added 2026-08-20. fetchPricesForTicker() below has its own inline copy of
+// this same retry loop (kept as-is here — it's well-tested and has extra
+// batch-cancel wiring specific to price fetching, not worth the risk of
+// touching). This shared version is for everything else that talks to
+// CORS_PROXIES, starting with the two dividends.sg fetches in
+// fetchDividendsSG(), which previously used ONLY corsproxy.io with no
+// fallback at all and no failure logging — so when that one proxy had a
+// bad moment (confirmed live 2026-08-20 on S63: the /coming page matched
+// fine, but the pay-date-carrying /view/{sym} fetch produced no console
+// output whatsoever, success or failure), the SGX declared-dividend
+// pipeline died silently with nothing to show for it.
+// Returns the successful Response, or null if every proxy failed (caller
+// doesn't need to log anything further — every failure path here already
+// does, including the final "all proxies failed" line).
+async function fetchViaProxyChain(targetUrl, label, timeoutMs = 8000) {
+  let res = null, lastStatus = null;
+  for (let i = 0; i < CORS_PROXIES.length; i++) {
+    try {
+      const attempt = await fetch(CORS_PROXIES[i](targetUrl), { signal: AbortSignal.timeout(timeoutMs) });
+      if (attempt.ok) {
+        res = attempt;
+        if (i > 0) console.log(`[${label}] recovered via proxy ${i+1}/${CORS_PROXIES.length} (earlier proxy failed)`);
+        break;
+      }
+      lastStatus = attempt.status;
+      console.warn(`[${label}] proxy ${i+1}/${CORS_PROXIES.length} HTTP ${attempt.status}`);
+    } catch (e) {
+      const isTimeout = e.name === 'TimeoutError' || e.name === 'AbortError';
+      console.warn(`[${label}] proxy ${i+1}/${CORS_PROXIES.length} ${isTimeout ? `timed out after ${timeoutMs}ms` : `network error (${e.message})`}`);
+    }
+  }
+  if (!res) console.warn(`[${label}] all ${CORS_PROXIES.length} proxies failed${lastStatus ? ` (last HTTP ${lastStatus})` : ''}`);
+  return res;
+}
 
 function toAVTicker(t) { return t; } // passthrough — kept so rest of code unchanged
 let AV_API_KEY = 'n/a'; // not used but referenced elsewhere
@@ -10388,12 +10433,11 @@ let sgxPayDateCache = {};
 // For each held ticker we also fetch /view/{sym} to get the pay date,
 // AND to backfill historical pay dates into sgxPayDateCache.
 async function fetchDividendsSG() {
-  const url      = 'https://www.dividends.sg/dividend/coming';
-  const proxyUrl = `https://corsproxy.io/?${encodeURIComponent(url)}`;
+  const url = 'https://www.dividends.sg/dividend/coming';
 
   try {
-    const res  = await fetch(proxyUrl, { signal: AbortSignal.timeout(10000) });
-    if (!res.ok) { console.warn('[dividends.sg] HTTP', res.status); return; }
+    const res = await fetchViaProxyChain(url, 'dividends.sg:coming');
+    if (!res) return; // fetchViaProxyChain already logged why
     const html = await res.text();
 
     // Parse the HTML table with a DOMParser — safe, no eval, no innerHTML injection
@@ -10625,12 +10669,29 @@ async function fetchDividendsSG() {
 
     const allToFetch = [...new Set([...matchedSyms, ...unmatchedSyms])];
 
-    await Promise.all(allToFetch.map(async sym => {
+    // Batched, not one giant Promise.all — added 2026-08-21. The 3-tier
+    // proxy fallback (2026-08-20) fixed correctness but multiplied
+    // per-symbol request volume up to 3x on top of what was already an
+    // unthrottled burst across every held SGX symbol at once. For a
+    // ~20-symbol portfolio that's up to ~60 simultaneous requests hitting
+    // the SAME three proxy services fetchAllPrices() also depends on —
+    // and THAT function batches its own requests deliberately (3 at a
+    // time, 600ms apart) specifically because "Yahoo Finance rate-limits
+    // aggressive parallel fetches with HTTP 429" (see its comment above).
+    // This loop had no such discipline at all. A large enough dividends
+    // burst can degrade the shared proxy pool's reliability generally,
+    // not just its own — plausible explanation for slower/failing price
+    // fetches (e.g. BN4.SI) reported shortly after the proxy-fallback fix
+    // shipped. Same batch size/delay as fetchAllPrices for consistency.
+    const DIV_BATCH       = 3;
+    const DIV_BATCH_DELAY = 600; // ms between batches
+    for (let i = 0; i < allToFetch.length; i += DIV_BATCH) {
+      const batch = allToFetch.slice(i, i + DIV_BATCH);
+      await Promise.all(batch.map(async sym => {
       try {
-        const viewUrl   = `https://www.dividends.sg/view/${sym}`;
-        const viewProxy = `https://corsproxy.io/?${encodeURIComponent(viewUrl)}`;
-        const vRes = await fetch(viewProxy, { signal: AbortSignal.timeout(10000) });
-        if (!vRes.ok) return;
+        const viewUrl = `https://www.dividends.sg/view/${sym}`;
+        const vRes = await fetchViaProxyChain(viewUrl, `dividends.sg:view:${sym}`);
+        if (!vRes) return; // fetchViaProxyChain already logged why — this used to be a bare, silent `return`
         const vHtml = await vRes.text();
         const parsed = parseViewPage(vHtml, now);
 
@@ -10662,7 +10723,28 @@ async function fetchDividendsSG() {
         }
 
         const result = parsed.upcoming;
-        if (!result) return;
+        if (!result) {
+          if (histEntries.length === 0) {
+            // Parsed literally nothing from a response that came back with
+            // a 200 status — this is the exact S63 symptom (2026-08-20):
+            // every proxy call "succeeded", every OTHER held SGX symbol
+            // logged a ✓, and S63 logged nothing at all, because this
+            // branch had no logging whatsoever. Zero rows out of a non-
+            // empty body almost always means the proxy handed back
+            // something that isn't the real dividends.sg page — a rate-
+            // limit/error page riding a 200 status instead of a proper
+            // HTTP error, which fetchViaProxyChain has no way to detect
+            // since it only treats non-ok status or a thrown error as
+            // failure. Logging the byte count + a snippet here means next
+            // time this happens, the actual response is visible instead
+            // of another silent gap.
+            console.warn(`[dividends.sg:view:${sym}] parsed ZERO rows from a ${vHtml.length}-byte response — likely not a real dividends.sg page. First 150 chars: ${JSON.stringify(vHtml.slice(0, 150))}`);
+          }
+          // else: history parsed fine, just nothing currently unpaid for
+          // this symbol — the common, expected case for most symbols on
+          // most refreshes, not logged to avoid drowning out the above.
+          return;
+        }
 
         const existing = announcedDivCache[sym];
         if (existing && existing.source === 'dividends.sg') {
@@ -10689,8 +10771,10 @@ async function fetchDividendsSG() {
           };
           console.log(`[dividends.sg] ✓ ${sym} — picked up from /view page: ${result.dps} ${result.currency} ex ${result.exStr}`);
         }
-      } catch(e) { /* best-effort */ }
-    }));
+      } catch(e) { console.warn(`[dividends.sg:view:${sym}] unexpected error:`, e.message); }
+      }));
+      if (i + DIV_BATCH < allToFetch.length) await new Promise(r => setTimeout(r, DIV_BATCH_DELAY));
+    }
 
   } catch(e) {
     console.warn('[dividends.sg] fetch failed:', e.message);
