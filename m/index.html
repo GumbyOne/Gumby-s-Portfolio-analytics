@@ -451,6 +451,19 @@ if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
     navigator.serviceWorker.register('sw.js').catch(() => {});
   });
+
+  // Auto-reload once when a new service worker takes control. Without
+  // this, an already-open tab/PWA instance keeps running under the OLD
+  // service worker until the next manual close+reopen, even after a new
+  // one has finished installing and activating in the background — added
+  // 2026-08-26 alongside the sw.js caching fix so future deploys resolve
+  // themselves without needing a manual force-close on the phone.
+  let refreshingForNewSW = false;
+  navigator.serviceWorker.addEventListener('controllerchange', () => {
+    if (refreshingForNewSW) return;
+    refreshingForNewSW = true;
+    window.location.reload();
+  });
 }
 </script>
 </body>
