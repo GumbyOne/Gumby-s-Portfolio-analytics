@@ -158,7 +158,14 @@
 <script>
 // ─── Config — mirrors the desktop app's proxy chain / FX pairs exactly ──
 const CORS_PROXIES = [
-  url => `https://corsproxy.io/?${encodeURIComponent(url)}`,
+  // 2026-08-26: corsproxy.io deprecated the anonymous/legacy query-string
+  // format (bare `?<url>`) — same fix as the desktop app's CORS_PROXIES,
+  // applied here too since this is a separate, independent copy of that
+  // array that didn't get updated when the desktop one was fixed. Without
+  // this, every price fetch here gets a fast 403 from corsproxy.io, all
+  // proxies for a symbol fail, and computeLive() returns null for every
+  // holding — nothing to do with the pasted-link/parsing code at all.
+  url => `https://corsproxy.io/?url=${encodeURIComponent(url)}`,
   url => `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`,
   url => `https://api.codetabs.com/v1/proxy/?quest=${encodeURIComponent(url)}`,
 ];
