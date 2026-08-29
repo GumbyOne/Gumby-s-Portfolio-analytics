@@ -157,17 +157,29 @@
 
 <script>
 // ─── Config — mirrors the desktop app's proxy chain / FX pairs exactly ──
+// 2026-08-27: corsproxy.io dropped entirely — its free-tier key issuance
+// turned out non-functional (a freshly-generated key with domains
+// registered exactly per their docs still returned "Invalid or inactive
+// API key"), the third distinct way this vendor broke in about a week.
+// codetabs.com also failed the same night (Cloudflare 522, unrelated to
+// this app). See the desktop app's CORS_PROXIES for the full writeup —
+// keep both copies in sync, this one is deliberately independent so it
+// didn't get updated automatically when the desktop one was fixed.
+// Gumby's own Cloudflare Worker — set up 2026-08-28. See the desktop
+// app's CORS_PROXIES for the full writeup. Keep both copies in sync if
+// this URL ever changes.
+const CLOUDFLARE_WORKER_URL = 'https://gumby-portfolio-proxy.yi-kheong.workers.dev';
+
 const CORS_PROXIES = [
-  // 2026-08-26: corsproxy.io deprecated the anonymous/legacy query-string
-  // format (bare `?<url>`) — same fix as the desktop app's CORS_PROXIES,
-  // applied here too since this is a separate, independent copy of that
-  // array that didn't get updated when the desktop one was fixed. Without
-  // this, every price fetch here gets a fast 403 from corsproxy.io, all
-  // proxies for a symbol fail, and computeLive() returns null for every
-  // holding — nothing to do with the pasted-link/parsing code at all.
-  url => `https://corsproxy.io/?url=${encodeURIComponent(url)}`,
-  url => `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`,
+  url => `${CLOUDFLARE_WORKER_URL}/?url=${encodeURIComponent(url)}`,
+  // Everything below is now just a safety net.
   url => `https://api.codetabs.com/v1/proxy/?quest=${encodeURIComponent(url)}`,
+  url => `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`,
+  // thingproxy.freeboard.io removed 2026-08-27 — confirmed dead
+  // (NAME_NOT_RESOLVED). See desktop app's CORS_PROXIES for details.
+  // api.cors.lol: smaller/newer, reliability unverified beyond its own
+  // docs — kept last so its uncertainty doesn't cost latency normally.
+  url => `https://api.cors.lol/?url=${encodeURIComponent(url)}`,
 ];
 const PROXY_TIMEOUT_MS = 8000;
 const BATCH = 3;

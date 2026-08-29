@@ -3851,19 +3851,57 @@ function processPortfolio(skipFetch = false) {
 // A ticker is only marked failed for the session once ALL THREE proxies
 // have failed. See PRICE_HISTORY_CACHE_KEY below for the next fallback
 // tier (last-known-good data from localStorage), used only at that point.
+// 2026-08-27: corsproxy.io's free-tier key issuance turned out to be
+// non-functional — even a key freshly generated from their own dashboard,
+// with the correct domains registered exactly as their docs describe,
+// returns {"error":"Invalid or inactive API key. Get a valid key at
+// https://corsproxy.io/pricing/"}. That's the third distinct way this one
+// vendor has broken in about a week (deprecated URL format → account+key
+// requirement → issued keys that don't work). Dropped entirely rather
+// than chase a fourth fix for it.
+//
+// Same night, codetabs.com — previously the most reliable tier in this
+// chain — started failing too (Cloudflare 522, confirmed twice via direct
+// isolated testing, nothing to do with anything in this app). Two
+// unrelated free proxy services going down simultaneously is the actual
+// lesson here: depending on any single "most reliable" proxy is fragile
+// by nature, whichever one currently holds that title. The fix isn't
+// finding a better primary, it's not depending on primacy at all — a
+// wider spread of independent, currently-keyless services so a
+// correlated outage among two or three of them still leaves live options.
+// Every entry here is keyless and was verified via each service's own
+// current documentation before being added (not guessed at) — corsproxy's
+// own doc-following key still not working is exactly why that guardrail
+// matters. If one starts requiring auth or moves formats, it'll surface
+// the same way corsproxy.io's format break did: a fast, specific error
+// from fetchViaProxyChain's per-proxy logging, not silence.
+// Gumby's own Cloudflare Worker — set up 2026-08-28, specifically because
+// every free public proxy below has had its own bad night, several on the
+// SAME night as each other. This one is his: hosted by an actual company
+// (Cloudflare), not a stranger's side project, and it only forwards
+// requests to Yahoo Finance and dividends.sg — nothing else — so it can't
+// be abused as a general-purpose proxy by anyone else who finds the URL.
+// Confirmed working live before this was wired in (real Keppel/BN4.SI
+// price data, correctly structured, direct browser test).
+const CLOUDFLARE_WORKER_URL = 'https://gumby-portfolio-proxy.yi-kheong.workers.dev';
+
 const CORS_PROXIES = [
-  // 2026-08-21: corsproxy.io deprecated the anonymous/legacy query-string
-  // format (bare `?<url>`) — it now returns a fast, explicit 403 with
-  // {"error":"keyless_legacy_url","message":"Anonymous legacy proxy URLs
-  // are no longer supported"} for EVERY request, regardless of target.
-  // Confirmed via direct A/B test against Yahoo: old format 403s, adding
-  // the `url=` parameter succeeds (200, correct price parsed) — matches
-  // corsproxy.io's own current docs, which have used `?url=` for a while.
-  // This one line is shared by every caller (price fetch, FX, both
-  // dividends.sg fetches), so the fix applies everywhere at once.
-  url => `https://corsproxy.io/?url=${encodeURIComponent(url)}`,
-  url => `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`,
+  url => `${CLOUDFLARE_WORKER_URL}/?url=${encodeURIComponent(url)}`,
+  // Everything below is now just a safety net in case the worker above
+  // ever has an issue — should rarely if ever be needed, but costs
+  // nothing to keep around.
   url => `https://api.codetabs.com/v1/proxy/?quest=${encodeURIComponent(url)}`,
+  url => `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`,
+  // thingproxy.freeboard.io removed 2026-08-27 — confirmed dead
+  // (NAME_NOT_RESOLVED, its domain doesn't resolve at all anymore),
+  // despite matching its documented format exactly. Freeboard.io itself
+  // appears to have gone offline. Zero value, pure dead weight — removed
+  // rather than left in as a guaranteed-fail tier.
+  // api.cors.lol: smaller/newer service, reliability unverified beyond its
+  // own docs (github.com/BradPerbs/cors.lol) — kept last in the chain so
+  // its uncertainty doesn't add latency to the common case, but it's free
+  // insurance if every other tier is down at once, like tonight.
+  url => `https://api.cors.lol/?url=${encodeURIComponent(url)}`,
 ];
 
 // ─── SHARED: fetch through the CORS_PROXIES chain, trying each in turn ───
