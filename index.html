@@ -10463,6 +10463,27 @@ let announcedDivCache = {};
 // Shape: { [sym]: { [exDateStr]: payDateString|null } }
 let sgxPayDateCache = {};
 
+// ─── DIVIDENDS.SG DATE READER ────────────────────────────────────────
+// dividends.sg redesigned its pages (confirmed 2026-09-21): dates now read
+// "8 Sep 2026" instead of "2026-09-08". Every date test below used to be
+// /^\d{4}-\d{2}-\d{2}$/ only, so on the new pages NO row had a readable
+// date, every row was skipped, and /view/{sym} logged "parsed ZERO rows" —
+// leaving sgxPayDateCache empty and every SGX dividend on the ex-date
+// stand-in (dividends not yet paid were then counted as received).
+// This accepts BOTH styles and always returns "YYYY-MM-DD" (or '' if the
+// text is not a date, e.g. "Date unavailable"), so nothing breaks if the
+// site changes format again or if an old-style page is ever served.
+const DSG_MONTHS = { jan:1, feb:2, mar:3, apr:4, may:5, jun:6, jul:7, aug:8, sep:9, sept:9, oct:10, nov:11, dec:12 };
+function dsgParseDate(text) {
+  const t = String(text || '').replace(/\s+/g, ' ').trim();
+  if (/^\d{4}-\d{2}-\d{2}$/.test(t)) return t;
+  const m = t.match(/^(\d{1,2}) ([A-Za-z]{3,4})\.? (\d{4})$/);
+  if (!m) return '';
+  const mon = DSG_MONTHS[m[2].toLowerCase()];
+  if (!mon) return '';
+  return `${m[3]}-${String(mon).padStart(2, '0')}-${m[1].padStart(2, '0')}`;
+}
+
 // ─── DIVIDENDS.SG SCRAPER ────────────────────────────────────────────
 // Fetches https://www.dividends.sg/dividend/coming — a public HTML page that
 // lists all upcoming declared SGX dividends with ticker, declared DPS,
@@ -10471,17 +10492,20 @@ let sgxPayDateCache = {};
 // For each held ticker we also fetch /view/{sym} to get the pay date,
 // AND to backfill historical pay dates into sgxPayDateCache.
 async function fetchDividendsSG() {
-  const url = 'https://www.dividends.sg/dividend/coming';
+  // The site's menu now points "Upcoming dividends" at /calendar (confirmed
+  // 2026-09-21). Try it first; keep the legacy address as a fallback in case
+  // it still works. Both are read by the same row logic below. Even if BOTH
+  // fail, every held SGX symbol is still fetched from its own /view page
+  // further down (unmatchedSyms), so pay dates are not lost — this page is
+  // only an early-notice shortcut.
+  const _todayIso = new Date().toISOString().slice(0, 10);
+  const _plus120  = new Date(Date.now() + 120 * 86400000).toISOString().slice(0, 10);
+  const comingUrls = [
+    `https://www.dividends.sg/calendar?date_field=ex_date&from=${_todayIso}&to=${_plus120}&event_type=dividend&security_type=shares&scope=all`,
+    'https://www.dividends.sg/dividend/coming'
+  ];
 
   try {
-    const res = await fetchViaProxyChain(url, 'dividends.sg:coming');
-    if (!res) return; // fetchViaProxyChain already logged why
-    const html = await res.text();
-
-    // Parse the HTML table with a DOMParser — safe, no eval, no innerHTML injection
-    const doc  = new DOMParser().parseFromString(html, 'text/html');
-    const rows = doc.querySelectorAll('table tr');
-
     const now = new Date();
     // Compare ex-dates by YYYY-MM-DD *date* rather than by instant. `new Date("2026-07-22")`
     // parses as midnight UTC = 08:00 SGT, so any comparison of the form `exDate <= now`
@@ -10495,88 +10519,110 @@ async function fetchDividendsSG() {
       .filter(h => h.exch === 'SGX')
       .forEach(h => { heldSGX[h.sym.toUpperCase()] = h; });
 
-    // Table columns vary — find Amount and Next Dividend by content pattern
-    // Column structure (confirmed from browser diagnostics):
-    // [0]=Ticker [1]=Price [2]=Change [3]=Yield [4]=Amount(CCY 0.000) [5]=ExDate(YYYY-MM-DD)
-    // The company name link is stripped by DOMParser leaving ticker as cells[0].
-    // We still scan by content pattern for robustness against future layout changes.
     let matched = 0;
-    // Log first data row cells for diagnostics if nothing matches
     let firstRowLogged = false;
-    rows.forEach(row => {
-      const cells = row.querySelectorAll('td');
-      if (cells.length < 4) return;
-      if (!firstRowLogged) {
-        console.log('[dividends.sg] first row cells:', Array.from(cells).map(c => c.textContent.trim()));
-        firstRowLogged = true;
-      }
 
-      // Ticker is in cells[0]
-      const sym = cells[0]?.textContent.trim().toUpperCase();
-      if (!sym || sym.length > 6) return;
-      const hld = heldSGX[sym];
-      if (!hld) return;
-      if (NON_DIVIDEND_SYMS.has(sym)) return;
-
-      // Scan cells for Amount and ExDate by content pattern.
-      // Amount formats seen: "SGD 0.0500", "SGD0.0500", "0.0500 SGD", "0.0500"
-      // ExDate format: "YYYY-MM-DD"
-      let amtText = null, exStr = null, ccy = 'SGD', dps = 0;
-      Array.from(cells).forEach(cell => {
-        const t = cell.textContent.trim();
-        if (!exStr && /^\d{4}-\d{2}-\d{2}$/.test(t)) exStr = t;
-        // "CCY 0.000" or "CCY0.000" (with or without space)
-        if (!amtText && /^[A-Z]{3}\s*[\d.]+$/.test(t)) amtText = t;
-        // "0.000 CCY" format
-        if (!amtText && /^[\d.]+\s+[A-Z]{3}$/.test(t)) amtText = t;
-        // plain number < 1 (DPS is always < 1 for SGX; prices are > 1)
-        if (!amtText && /^[\d]+\.[\d]+$/.test(t) && parseFloat(t) < 1) amtText = 'SGD ' + t;
-      });
-
-      if (!amtText || !exStr) return;
-
-      // Normalise: insert space between CCY and number if missing ("SGD0.05" → "SGD 0.05")
-      const normAmt = amtText.replace(/^([A-Z]{3})([\d.]+)$/, '$1 $2');
-      const amtParts = normAmt.trim().split(/\s+/);
-      if (/^[A-Z]{3}$/.test(amtParts[0])) {
-        ccy = amtParts[0];
-        dps = parseFloat(amtParts[1]) || 0;
-      } else {
-        dps = parseFloat(amtParts[0]) || 0;
-        ccy = /^[A-Z]{3}$/.test(amtParts[1]) ? amtParts[1] : 'SGD';
-      }
-      if (!dps) return;
-
-      const exDate = new Date(exStr);
-      // Compare on YYYY-MM-DD, not instants — see note near `todayStr` definition above.
-      if (isNaN(exDate.getTime()) || exStr < todayStr) return;
-
-      // If same ticker already has an entry for this ex-date (e.g. ordinary + special
-      // dividend on the same date — common for SIA C6L), ADD the DPS rather than
-      // skipping. If the existing entry is for a different (earlier) ex-date, replace it.
-      const existing = announcedDivCache[sym];
-      if (existing && existing.source === 'dividends.sg') {
-        const existEx = existing.exDate.toISOString().slice(0,10);
-        if (existEx === exStr) {
-          // Same ex-date — accumulate DPS (ordinary + special)
-          existing.dps      += dps;
-          existing.grossSGD  = toSGD(hld.shares * existing.dps, existing.currency);
-          return; // don't create a new entry
-        } else if (existing.exDate < exDate) {
-          return; // keep the sooner upcoming entry
+    // Reads one upcoming-dividends page. Returns how many holdings matched.
+    // Layouts handled:
+    //   legacy   [0]=Ticker [1]=Price [2]=Change [3]=Yield [4]=Amount [5]=ExDate
+    //   calendar [0]=Ex-date [1]=Security(link + code) [2]=Per share [3]=Pays [4]=Details
+    // The ticker is taken from the row's /view/{code} link when there is one
+    // (the calendar's Security cell glues name and code together, so its
+    // text is not usable); otherwise from cell 0 as before. Amount and dates
+    // are found by content pattern, not column position.
+    const processComingHtml = (html) => {
+      const doc  = new DOMParser().parseFromString(html, 'text/html');
+      const rows = doc.querySelectorAll('table tr');
+      let n = 0;
+      rows.forEach(row => {
+        const cells = row.querySelectorAll('td');
+        if (cells.length < 4) return;
+        if (!firstRowLogged) {
+          console.log('[dividends.sg] first row cells:', Array.from(cells).map(c => c.textContent.replace(/\s+/g, ' ').trim()));
+          firstRowLogged = true;
         }
-        // existing is later — fall through to replace it
-      }
 
-      const grossSGD = toSGD(hld.shares * dps, ccy);
-      announcedDivCache[sym] = {
-        sym, exch: 'SGX', exDate,
-        payDate: null,   // fetched separately below for matched tickers
-        dps, currency: ccy, source: 'dividends.sg',
-        sharesHeld: hld.shares, grossSGD
-      };
-      matched++;
-    });
+        let sym = '';
+        const link = row.querySelector('a[href*="/view/"]');
+        if (link) {
+          const m = (link.getAttribute('href') || '').match(/\/view\/([^/?#]+)/i);
+          if (m) { try { sym = decodeURIComponent(m[1]).toUpperCase(); } catch (e) { sym = m[1].toUpperCase(); } }
+        }
+        if (!sym) sym = cells[0]?.textContent.trim().toUpperCase();
+        if (!sym || sym.length > 6) return;
+        const hld = heldSGX[sym];
+        if (!hld) return;
+        if (NON_DIVIDEND_SYMS.has(sym)) return;
+
+        // Amount formats seen: "SGD 0.0500", "SGD0.0500", "0.0500 SGD", "0.0500"
+        let amtText = null, ccy = 'SGD', dps = 0;
+        const dates = [];
+        Array.from(cells).forEach(cell => {
+          const t = cell.textContent.replace(/\s+/g, ' ').trim();
+          const d = dsgParseDate(t);
+          if (d) { dates.push(d); return; }
+          if (!amtText && /^[A-Z]{3}\s*[\d.]+$/.test(t)) amtText = t;
+          if (!amtText && /^[\d.]+\s+[A-Z]{3}$/.test(t)) amtText = t;
+          // plain number < 1 (DPS is always < 1 for SGX; prices are > 1)
+          if (!amtText && /^[\d]+\.[\d]+$/.test(t) && parseFloat(t) < 1) amtText = 'SGD ' + t;
+        });
+        const exStr  = dates[0] || null;     // first date on the row = ex-date
+        const payStr = dates[1] || '';       // second (calendar layout only) = pay date
+        if (!amtText || !exStr) return;
+
+        // Normalise: insert space between CCY and number if missing ("SGD0.05" → "SGD 0.05")
+        const normAmt = amtText.replace(/^([A-Z]{3})([\d.]+)$/, '$1 $2');
+        const amtParts = normAmt.trim().split(/\s+/);
+        if (/^[A-Z]{3}$/.test(amtParts[0])) {
+          ccy = amtParts[0];
+          dps = parseFloat(amtParts[1]) || 0;
+        } else {
+          dps = parseFloat(amtParts[0]) || 0;
+          ccy = /^[A-Z]{3}$/.test(amtParts[1]) ? amtParts[1] : 'SGD';
+        }
+        if (!dps) return;
+
+        const exDate = new Date(exStr);
+        // Compare on YYYY-MM-DD, not instants — see note near `todayStr` definition above.
+        if (isNaN(exDate.getTime()) || exStr < todayStr) return;
+
+        // If same ticker already has an entry for this ex-date (e.g. ordinary + special
+        // dividend on the same date — common for SIA C6L), ADD the DPS rather than
+        // skipping. If the existing entry is for a different (earlier) ex-date, replace it.
+        const existing = announcedDivCache[sym];
+        if (existing && existing.source === 'dividends.sg') {
+          const existEx = existing.exDate.toISOString().slice(0,10);
+          if (existEx === exStr) {
+            existing.dps      += dps;
+            existing.grossSGD  = toSGD(hld.shares * existing.dps, existing.currency);
+            if (!existing.payDate && payStr) existing.payDate = new Date(payStr);
+            return; // don't create a new entry
+          } else if (existing.exDate < exDate) {
+            return; // keep the sooner upcoming entry
+          }
+          // existing is later — fall through to replace it
+        }
+
+        const grossSGD = toSGD(hld.shares * dps, ccy);
+        announcedDivCache[sym] = {
+          sym, exch: 'SGX', exDate,
+          payDate: payStr ? new Date(payStr) : null,   // /view/{sym} below confirms/updates it
+          dps, currency: ccy, source: 'dividends.sg',
+          sharesHeld: hld.shares, grossSGD
+        };
+        n++;
+      });
+      return n;
+    };
+
+    for (const url of comingUrls) {
+      const res = await fetchViaProxyChain(url, 'dividends.sg:coming');
+      if (!res) continue; // fetchViaProxyChain already logged why
+      const html = await res.text();
+      matched = processComingHtml(html);
+      if (matched > 0) break;
+      console.warn(`[dividends.sg] ${url} gave 0 matched holdings from a ${html.length}-byte response — trying next address (if any)`);
+    }
 
     console.log(`[dividends.sg] ✓ ${matched} holdings matched from upcoming table`);
 
@@ -10609,18 +10655,26 @@ async function fetchDividendsSG() {
       // line (very common — most SGX dividends are an ordinary + a special,
       // or split into two "Rate" entries). Fixed 2026-06-22.
       const byEx = {};
+      const seenRowKeys = new Set();
       let lastExStr = null;
       const dateRe = /^\d{4}-\d{2}-\d{2}$/;
       const amtRe  = /^[A-Z]{3}\s*[\d.]+$/;
       rows.forEach(row => {
-        const cellTexts = Array.from(row.querySelectorAll('td')).map(c => c.textContent.trim());
+        const cellTexts = Array.from(row.querySelectorAll('td')).map(c => c.textContent.replace(/\s+/g, ' ').trim());
         if (cellTexts.length < 2) return;
 
         // Find every date-pattern cell, in document order. The page always
         // lists Ex Date before Pay Date within a row, so first = ex-date,
         // second (if present) = pay-date — regardless of which column index
         // they happen to land on for this particular row.
-        const dateCells = cellTexts.filter(t => dateRe.test(t));
+        //
+        // dividends.sg changed its date style to "8 Sep 2026" (confirmed
+        // 2026-09-21). dsgParseDate() reads both that and the old
+        // "2026-09-08" and always hands back "YYYY-MM-DD", so everything
+        // below (dateRe checks, new Date(...)) keeps working unchanged.
+        // A pay-date cell reading "Date unavailable" is simply not a date,
+        // so the row keeps its ex-date and gets no pay date.
+        const dateCells = cellTexts.map(dsgParseDate).filter(Boolean);
         const exCell  = dateCells[0] || '';
         const payCell = dateCells[1] || '';
 
@@ -10642,6 +10696,18 @@ async function fetchDividendsSG() {
 
         // Update last known ex-date if this row has a valid one
         if (dateRe.test(exCell)) lastExStr = exCell;
+
+        // The redesigned page can list the SAME payout twice under different
+        // source references (AJBU 30 Jul 2026: SGD 0.00518 appears twice next
+        // to 0.04838 and 0.00358; SGX's real total is 0.05714, and summing
+        // every row would give 0.06232). Only rows that carry their own
+        // ex-date can be checked this way, so old-style continuation rows
+        // (no date cells — e.g. C6L's ordinary + special) are never dropped.
+        if (dateRe.test(exCell) && amtStr) {
+          const dupKey = exCell + '|' + payCell + '|' + amtStr.replace(/\s+/g, '');
+          if (seenRowKeys.has(dupKey)) return;
+          seenRowKeys.add(dupKey);
+        }
 
         // Use current row's ex-date or fall back to last seen (handles the
         // rare case where even the ex-date cell itself is rowspan-collapsed)
